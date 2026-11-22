@@ -1,0 +1,57 @@
+name: Render MP4 Video
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "ID único del render"
+        required: true
+        type: string
+      asset_id:
+        description: "ID del asset JSON temporal"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare render assets and props
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ASSET_ID: ${{ inputs.asset_id }}
+        run: node scripts/prepare-render.mjs
+
+      - name: Render MP4 with Remotion
+        run: |
+          mkdir -p out
+          npx remotion render src/remotion/index.ts DynamicVideo "out/video-${{ inputs.job_id }}.mp4" --props=./render-props.json --codec=h264 --pixel-format=yuv420p --concurrency=50%
+
+      - name: Upload MP4 to Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_ID: ${{ inputs.job_id }}
+          ASSET_ID: ${{ inputs.asset_id }}
+        run: node scripts/upload-render.mjs
+
+      - name: Save MP4 artifact backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-${{ inputs.job_id }}
+          path: out/video-${{ inputs.job_id }}.mp4
+          retention-days: 7

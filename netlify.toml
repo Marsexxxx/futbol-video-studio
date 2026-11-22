@@ -11,6 +11,14 @@
   path = "/api/generate-tts"
   function = "generate-tts"
 
+[[edge_functions]]
+  path = "/api/export-video"
+  function = "export-video"
+
+[[edge_functions]]
+  path = "/api/export-status"
+  function = "export-status"
+
 [dev]
   command = "npm run dev"
   targetPort = 5173

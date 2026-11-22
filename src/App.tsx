@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Player } from "@remotion/player";
 import {
   Sparkles,
@@ -10,10 +10,13 @@ import {
   Image as ImageIcon,
   Mic,
   Volume2,
+  Loader2,
+  CheckCircle2,
+  ExternalLink,
 } from "lucide-react";
 import { DynamicVideo, SCENE_LEAD_IN_FRAMES } from "./remotion/DynamicVideo";
 import { DEFAULT_VIDEO_SPEC } from "./defaultVideo";
-import { SceneType, VideoScene, VideoSpec } from "./types";
+import { SceneType, SubtitleStyle, VideoScene, VideoSpec } from "./types";
 
 const FPS = 30;
 const LEAD_IN_SEC = SCENE_LEAD_IN_FRAMES / FPS;
@@ -63,6 +66,14 @@ type TtsResponse = {
   error?: string;
 };
 
+type ExportState = {
+  status: "idle" | "uploading" | "queued" | "in_progress" | "completed" | "failed";
+  jobId?: string;
+  mp4AssetId?: number;
+  runUrl?: string;
+  error?: string;
+};
+
 function calcSceneDuration(rawAudioDuration: number, speed: number): number {
   const total = LEAD_IN_SEC + rawAudioDuration / speed + TAIL_PAUSE_SEC;
   return Number(Math.max(2.5, Math.ceil(total * 20) / 20).toFixed(2));
@@ -77,12 +88,50 @@ function base64ToBytes(base64: string): Uint8Array {
   return bytes;
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function mimeToExt(mime: string, fallback: string): string {
+  const lower = mime.toLowerCase();
+  if (lower.includes("wav")) return "wav";
+  if (lower.includes("mpeg") || lower.includes("mp3")) return "mp3";
+  if (lower.includes("ogg")) return "ogg";
+  if (lower.includes("mp4") || lower.includes("m4a")) return "m4a";
+  if (lower.includes("png")) return "png";
+  if (lower.includes("webp")) return "webp";
+  if (lower.includes("jpeg") || lower.includes("jpg")) return "jpg";
+  return fallback;
+}
+
+async function blobUrlToAsset(
+  url: string,
+  fallbackExt: string
+): Promise<{ base64: string; ext: string }> {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  const buffer = await blob.arrayBuffer();
+  return {
+    base64: bytesToBase64(new Uint8Array(buffer)),
+    ext: mimeToExt(blob.type, fallbackExt),
+  };
+}
+
 async function measureExactAudioDuration(
   bytes: Uint8Array,
   blobUrl: string,
   serverDuration?: number | null
 ): Promise<number> {
-  if (typeof serverDuration === "number" && Number.isFinite(serverDuration) && serverDuration > 0.2) {
+  if (
+    typeof serverDuration === "number" &&
+    Number.isFinite(serverDuration) &&
+    serverDuration > 0.2
+  ) {
     return serverDuration;
   }
 
@@ -110,7 +159,11 @@ async function measureExactAudioDuration(
     const audio = new window.Audio();
     audio.preload = "metadata";
     audio.onloadedmetadata = () => {
-      resolve(Number.isFinite(audio.duration) && audio.duration > 0.2 ? audio.duration : 5);
+      resolve(
+        Number.isFinite(audio.duration) && audio.duration > 0.2
+          ? audio.duration
+          : 5
+      );
     };
     audio.onerror = () => resolve(5);
     audio.src = blobUrl;
@@ -171,6 +224,7 @@ export function App() {
   const [spec, setSpec] = useState<VideoSpec>({
     ...DEFAULT_VIDEO_SPEC,
     voiceSpeed: 1.0,
+    subtitleStyle: "dynamic",
   });
   const [prompt, setPrompt] = useState("");
   const [targetDuration, setTargetDuration] = useState(35);
@@ -181,6 +235,7 @@ export function App() {
   const [accent, setAccent] = useState("es-MX");
   const [voiceStyle, setVoiceStyle] = useState("tiktok");
   const [voiceSpeed, setVoiceSpeed] = useState(1.0);
+  const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>("dynamic");
   const [voiceProvider, setVoiceProvider] = useState<string | null>(null);
   const [autoVoice, setAutoVoice] = useState(true);
   const [voiceLoading, setVoiceLoading] = useState(false);
@@ -189,10 +244,19 @@ export function App() {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioName, setAudioName] = useState<string | null>(null);
+  const [exportState, setExportState] = useState<ExportState>({ status: "idle" });
+  const pollTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) window.clearInterval(pollTimerRef.current);
+    };
+  }, []);
 
   const totalFrames = useMemo(() => {
     const frames = spec.scenes.reduce(
-      (acc, scene) => acc + Math.max(30, Math.ceil((scene.durationSeconds || 5) * FPS)),
+      (acc, scene) =>
+        acc + Math.max(30, Math.ceil((scene.durationSeconds || 5) * FPS)),
       0
     );
     return Math.max(30, frames);
@@ -203,6 +267,17 @@ export function App() {
   const syncedScenesCount = useMemo(
     () => spec.scenes.filter((s) => Boolean(s.audioUrl)).length,
     [spec]
+  );
+
+  const videoSlug = useMemo(
+    () =>
+      (spec.title || "video-barca")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") || "video-barca",
+    [spec.title]
   );
 
   const handleSpeedChange = (newSpeed: number) => {
@@ -218,6 +293,14 @@ export function App() {
             }
           : scene
       ),
+    }));
+  };
+
+  const handleSubtitleStyleChange = (nextStyle: SubtitleStyle) => {
+    setSubtitleStyle(nextStyle);
+    setSpec((prev) => ({
+      ...prev,
+      subtitleStyle: nextStyle,
     }));
   };
 
@@ -264,6 +347,7 @@ export function App() {
         setSpec({
           ...targetSpec,
           voiceSpeed: selectedSpeed,
+          subtitleStyle,
           scenes: [...updatedScenes],
         });
       }
@@ -271,7 +355,9 @@ export function App() {
       setVoiceProvider(lastProvider);
     } catch (err) {
       setVoiceError(
-        err instanceof Error ? err.message : "Error al generar las voces con Gemini."
+        err instanceof Error
+          ? err.message
+          : "Error al generar las voces con Gemini."
       );
     } finally {
       setVoiceLoading(false);
@@ -353,18 +439,163 @@ export function App() {
       const generatedSpec: VideoSpec = {
         ...(data as VideoSpec),
         voiceSpeed,
+        subtitleStyle,
       };
       setSpec(generatedSpec);
 
       if (autoVoice && !audioUrl) {
         setLoadingStep("Generando voz de estudio...");
-        await generateAllVoices(generatedSpec, voice, accent, voiceStyle, voiceSpeed);
+        await generateAllVoices(
+          generatedSpec,
+          voice,
+          accent,
+          voiceStyle,
+          voiceSpeed
+        );
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error de conexión con Gemini.");
+      setError(
+        err instanceof Error ? err.message : "Error de conexión con Gemini."
+      );
     } finally {
       setLoading(false);
       setLoadingStep("");
+    }
+  };
+
+  const triggerDownload = (assetId: number) => {
+    const downloadUrl = `/api/export-status?download=1&assetId=${encodeURIComponent(String(assetId))}&name=${encodeURIComponent(videoSlug)}`;
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.download = `${videoSlug}.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  const handleExportMp4 = async () => {
+    if (pollTimerRef.current) {
+      window.clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+
+    const jobId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    setExportState({ status: "uploading", jobId });
+
+    try {
+      const assets: Record<string, { base64: string; ext: string }> = {};
+
+      let globalAudioKey: string | undefined;
+      if (audioUrl && audioUrl.startsWith("blob:")) {
+        globalAudioKey = "global-audio";
+        assets[globalAudioKey] = await blobUrlToAsset(audioUrl, "mp3");
+      }
+
+      const exportScenes: VideoScene[] = [];
+      for (let i = 0; i < spec.scenes.length; i++) {
+        const s = spec.scenes[i];
+        const copy: VideoScene = { ...s };
+
+        if (!globalAudioKey && s.audioUrl && s.audioUrl.startsWith("blob:")) {
+          const key = `scene-audio-${i}`;
+          assets[key] = await blobUrlToAsset(s.audioUrl, "wav");
+          copy.audioAssetKey = key;
+        }
+        delete copy.audioUrl;
+
+        if (s.imageUrl && s.imageUrl.startsWith("blob:")) {
+          const key = `scene-image-${i}`;
+          assets[key] = await blobUrlToAsset(s.imageUrl, "png");
+          copy.imageAssetKey = key;
+          delete copy.imageUrl;
+        }
+
+        exportScenes.push(copy);
+      }
+
+      const exportSpec: VideoSpec = {
+        ...spec,
+        voiceSpeed,
+        subtitleStyle,
+        globalAudioKey,
+        scenes: exportScenes,
+      };
+
+      const res = await fetch("/api/export-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId, spec: exportSpec, assets }),
+      });
+
+      const raw = await res.text();
+      let data: {
+        ok?: boolean;
+        startedAt?: number;
+        actionsUrl?: string;
+        error?: string;
+      } = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error(`Error al iniciar exportación (${res.status}): ${raw.slice(0, 140)}`);
+      }
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || `Error ${res.status} al exportar MP4.`);
+      }
+
+      const startedAt = data.startedAt || Date.now();
+      setExportState({
+        status: "queued",
+        jobId,
+        runUrl: data.actionsUrl,
+      });
+
+      pollTimerRef.current = window.setInterval(async () => {
+        try {
+          const statusRes = await fetch(
+            `/api/export-status?jobId=${encodeURIComponent(jobId)}&startedAt=${startedAt}`
+          );
+          if (!statusRes.ok) return;
+          const st = await statusRes.json();
+
+          if (st.status === "completed" && st.assetId) {
+            if (pollTimerRef.current) {
+              window.clearInterval(pollTimerRef.current);
+              pollTimerRef.current = null;
+            }
+            setExportState({
+              status: "completed",
+              jobId,
+              mp4AssetId: st.assetId,
+              runUrl: st.runUrl || data.actionsUrl,
+            });
+            triggerDownload(st.assetId);
+          } else if (st.status === "failed") {
+            if (pollTimerRef.current) {
+              window.clearInterval(pollTimerRef.current);
+              pollTimerRef.current = null;
+            }
+            setExportState({
+              status: "failed",
+              jobId,
+              runUrl: st.runUrl || data.actionsUrl,
+              error: `El render falló en GitHub Actions (${st.conclusion || "error"}). Revisa el registro.`,
+            });
+          } else if (st.status === "in_progress" || st.status === "queued") {
+            setExportState((prev) => ({
+              ...prev,
+              status: st.status,
+              runUrl: st.runUrl || prev.runUrl,
+            }));
+          }
+        } catch {}
+      }, 4500);
+    } catch (err) {
+      setExportState({
+        status: "failed",
+        error: err instanceof Error ? err.message : "No se pudo exportar el MP4.",
+      });
     }
   };
 
@@ -430,10 +661,15 @@ export function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${spec.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "video"}.json`;
+    a.download = `${videoSlug}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  const isExporting =
+    exportState.status === "uploading" ||
+    exportState.status === "queued" ||
+    exportState.status === "in_progress";
 
   return (
     <div className="studio-shell">
@@ -448,16 +684,85 @@ export function App() {
             <Download size={16} />
             JSON
           </button>
+
+          {exportState.status === "completed" && exportState.mp4AssetId ? (
+            <button
+              type="button"
+              className="btn-success"
+              onClick={() => triggerDownload(exportState.mp4AssetId!)}
+            >
+              <CheckCircle2 size={16} />
+              Descargar MP4
+            </button>
+          ) : null}
+
           <button
             type="button"
             className="btn-primary"
-            disabled
-            title="Lo conectaremos con GitHub Actions en el siguiente paso"
+            disabled={isExporting || loading || voiceLoading}
+            onClick={handleExportMp4}
           >
-            Exportar MP4 (Siguiente paso)
+            {isExporting ? (
+              <>
+                <Loader2 size={16} className="spin" />
+                {exportState.status === "uploading"
+                  ? "Subiendo..."
+                  : exportState.status === "in_progress"
+                  ? "Renderizando MP4..."
+                  : "En cola..."}
+              </>
+            ) : (
+              <>
+                <Download size={16} />
+                Exportar MP4
+              </>
+            )}
           </button>
         </div>
       </header>
+
+      {exportState.status !== "idle" && (
+        <div className={`export-banner export-${exportState.status}`}>
+          <div className="export-banner-left">
+            {isExporting && <Loader2 size={16} className="spin" />}
+            {exportState.status === "completed" && <CheckCircle2 size={16} />}
+            <span>
+              {exportState.status === "uploading" &&
+                "Empaquetando escenas, subtítulos y audio para renderizar..."}
+              {exportState.status === "queued" &&
+                "Trabajo enviado a GitHub Actions. Esperando servidor de render (1-2 min)..."}
+              {exportState.status === "in_progress" &&
+                "Renderizando video 1080×1920 con Remotion en la nube..."}
+              {exportState.status === "completed" &&
+                "Tu video MP4 está listo. La descarga inició automáticamente."}
+              {exportState.status === "failed" &&
+                (exportState.error || "Error al exportar el video.")}
+            </span>
+          </div>
+          <div className="export-banner-actions">
+            {exportState.runUrl && (
+              <a
+                href={exportState.runUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="export-link"
+              >
+                Ver progreso <ExternalLink size={13} />
+              </a>
+            )}
+            {exportState.status === "completed" && exportState.mp4AssetId && (
+              <button
+                type="button"
+                className="btn-success"
+                onClick={() => triggerDownload(exportState.mp4AssetId!)}
+              >
+                <Download size={14} />
+                Volver a descargar
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       <main className="studio-grid">
         <section className="editor-panel">
@@ -484,7 +789,11 @@ export function App() {
                 />
                 <span>seg</span>
               </label>
-              <button type="submit" className="btn-primary" disabled={loading || voiceLoading}>
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={loading || voiceLoading}
+              >
                 <Sparkles size={16} />
                 {loading ? loadingStep || "Generando..." : "Crear video"}
               </button>
@@ -496,11 +805,12 @@ export function App() {
             <div className="card-header-between">
               <div className="card-title">
                 <Volume2 size={16} />
-                <span>Voz en off (Gemini Studio TTS o audio propio)</span>
+                <span>Voz en off y subtítulos</span>
               </div>
               {!audioUrl && syncedScenesCount > 0 && (
                 <span className="status-badge">
-                  {voiceProvider || "Gemini TTS"} · {voiceSpeed}x ({syncedScenesCount}/{spec.scenes.length})
+                  {voiceProvider || "Gemini TTS"} · {voiceSpeed}x (
+                  {syncedScenesCount}/{spec.scenes.length})
                 </span>
               )}
               {audioUrl && <span className="status-badge">Usando tu audio</span>}
@@ -523,7 +833,10 @@ export function App() {
                 ))}
               </select>
 
-              <select value={voiceStyle} onChange={(e) => setVoiceStyle(e.target.value)}>
+              <select
+                value={voiceStyle}
+                onChange={(e) => setVoiceStyle(e.target.value)}
+              >
                 {STYLE_OPTIONS.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.label}
@@ -541,6 +854,21 @@ export function App() {
                   </option>
                 ))}
               </select>
+
+              <select
+                value={subtitleStyle}
+                onChange={(e) =>
+                  handleSubtitleStyleChange(e.target.value as SubtitleStyle)
+                }
+                className="full-span"
+              >
+                <option value="dynamic">
+                  Subtítulos dinámicos (Palabra por palabra estilo TikTok)
+                </option>
+                <option value="classic">
+                  Subtítulos clásicos (Bloque completo fijo)
+                </option>
+              </select>
             </div>
 
             <div className="audio-row">
@@ -553,14 +881,23 @@ export function App() {
                 }
               >
                 <Volume2 size={15} />
-                {voiceLoading ? voiceProgress || "Generando voz..." : "Generar voz Gemini"}
+                {voiceLoading
+                  ? voiceProgress || "Generando voz..."
+                  : "Generar voz Gemini"}
               </button>
 
               <label className="btn-secondary file-label">
                 <Mic size={15} />
                 <Upload size={14} />
-                <span>{audioName ? "Cambiar mi voz" : "Subir mi voz (.mp3 / .wav)"}</span>
-                <input type="file" accept="audio/*" hidden onChange={handleAudioUpload} />
+                <span>
+                  {audioName ? "Cambiar mi voz" : "Subir mi voz (.mp3 / .wav)"}
+                </span>
+                <input
+                  type="file"
+                  accept="audio/*"
+                  hidden
+                  onChange={handleAudioUpload}
+                />
               </label>
 
               {audioName && (
@@ -674,7 +1011,9 @@ export function App() {
                   <textarea
                     rows={2}
                     value={scene.subtitle}
-                    onChange={(e) => updateScene(index, { subtitle: e.target.value })}
+                    onChange={(e) =>
+                      updateScene(index, { subtitle: e.target.value })
+                    }
                     placeholder="Texto narrado y subtítulo en pantalla"
                   />
                 </div>

@@ -7,16 +7,101 @@ import {
   interpolate,
   Sequence,
   spring,
+  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import { VideoScene, VideoSpec, VideoTheme } from "../types";
+import { SubtitleStyle, VideoScene, VideoSpec, VideoTheme } from "../types";
 
 export const SCENE_LEAD_IN_FRAMES = 6;
 
 export type DynamicVideoProps = {
   spec: VideoSpec;
   audioUrl?: string | null;
+};
+
+type WordTiming = {
+  text: string;
+  start: number;
+  end: number;
+};
+
+type SubtitleChunk = {
+  words: WordTiming[];
+  start: number;
+  end: number;
+};
+
+const resolveMediaSrc = (src?: string | null): string | undefined => {
+  if (!src) return undefined;
+  if (
+    src.startsWith("blob:") ||
+    src.startsWith("http://") ||
+    src.startsWith("https://") ||
+    src.startsWith("data:")
+  ) {
+    return src;
+  }
+  return staticFile(src);
+};
+
+const buildWordChunks = (
+  text: string,
+  startFrame: number,
+  speechFrames: number
+): SubtitleChunk[] => {
+  const rawWords = text.trim().split(/\s+/).filter(Boolean);
+  if (rawWords.length === 0) return [];
+
+  const weights = rawWords.map((word) => {
+    const cleanLen = word.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ]/g, "").length;
+    const punctBonus = /[.,;!?]$/.test(word) ? 3 : 0;
+    return Math.max(2, cleanLen) + 1.5 + punctBonus;
+  });
+
+  const totalWeight = weights.reduce((acc, w) => acc + w, 0);
+  let cursor = startFrame;
+
+  const timedWords: WordTiming[] = rawWords.map((word, idx) => {
+    const dur = (weights[idx] / totalWeight) * speechFrames;
+    const item: WordTiming = {
+      text: word,
+      start: cursor,
+      end: cursor + dur,
+    };
+    cursor += dur;
+    return item;
+  });
+
+  const chunks: SubtitleChunk[] = [];
+  let bucket: WordTiming[] = [];
+  let bucketChars = 0;
+
+  for (const item of timedWords) {
+    const nextChars = bucketChars + item.text.length + (bucket.length > 0 ? 1 : 0);
+    if (bucket.length > 0 && (bucket.length >= 4 || nextChars > 24)) {
+      chunks.push({
+        words: bucket,
+        start: bucket[0].start,
+        end: bucket[bucket.length - 1].end,
+      });
+      bucket = [item];
+      bucketChars = item.text.length;
+    } else {
+      bucket.push(item);
+      bucketChars = nextChars;
+    }
+  }
+
+  if (bucket.length > 0) {
+    chunks.push({
+      words: bucket,
+      start: bucket[0].start,
+      end: bucket[bucket.length - 1].end,
+    });
+  }
+
+  return chunks;
 };
 
 const SceneFade: React.FC<{ children: React.ReactNode; isFirst: boolean }> = ({
@@ -50,7 +135,7 @@ const SceneFade: React.FC<{ children: React.ReactNode; isFirst: boolean }> = ({
   );
 };
 
-const SubtitlePill: React.FC<{ text: string; accent: string }> = ({
+const ClassicSubtitle: React.FC<{ text: string; accent: string }> = ({
   text,
   accent,
 }) => {
@@ -91,14 +176,153 @@ const SubtitlePill: React.FC<{ text: string; accent: string }> = ({
   );
 };
 
-const SceneHook: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
+const DynamicSubtitle: React.FC<{
+  scene: VideoScene;
+  accent: string;
+  voiceSpeed: number;
+}> = ({ scene, accent, voiceSpeed }) => {
+  const frame = useCurrentFrame();
+  const { fps, durationInFrames } = useVideoConfig();
+
+  if (!scene.subtitle?.trim()) return null;
+
+  const speechFrames = scene.rawAudioDuration
+    ? Math.max(15, (scene.rawAudioDuration / (voiceSpeed || 1)) * fps)
+    : Math.max(20, durationInFrames - SCENE_LEAD_IN_FRAMES - 18);
+
+  const chunks = buildWordChunks(
+    scene.subtitle,
+    SCENE_LEAD_IN_FRAMES,
+    speechFrames
+  );
+
+  if (chunks.length === 0) return null;
+
+  let activeChunkIndex = chunks.findIndex(
+    (c) => frame >= c.start && frame < c.end
+  );
+  if (activeChunkIndex === -1) {
+    activeChunkIndex = frame < chunks[0].start ? 0 : chunks.length - 1;
+  }
+
+  const activeChunk = chunks[activeChunkIndex];
+  const chunkFrame = Math.max(0, frame - Math.floor(activeChunk.start));
+  const chunkPop = spring({
+    frame: chunkFrame,
+    fps,
+    config: { damping: 14, stiffness: 220 },
+  });
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        bottom: 92,
+        left: 44,
+        right: 44,
+        display: "flex",
+        justifyContent: "center",
+        pointerEvents: "none",
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: "rgba(6, 12, 24, 0.88)",
+          border: `3px solid rgba(255, 255, 255, 0.16)`,
+          borderRadius: 28,
+          padding: "24px 32px",
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: "12px 16px",
+          maxWidth: "100%",
+          boxShadow: "0 18px 42px rgba(0, 0, 0, 0.55)",
+          fontFamily: "system-ui, -apple-system, sans-serif",
+          transform: `translateY(${interpolate(chunkPop, [0, 1], [14, 0])}px) scale(${interpolate(chunkPop, [0, 1], [0.94, 1])})`,
+        }}
+      >
+        {activeChunk.words.map((word, idx) => {
+          const isCurrent = frame >= word.start && frame < word.end;
+          const isSpoken = frame >= word.end;
+          const wordSpring = isCurrent
+            ? spring({
+                frame: Math.max(0, frame - Math.floor(word.start)),
+                fps,
+                config: { damping: 12, stiffness: 260 },
+              })
+            : 0;
+
+          return (
+            <span
+              key={`${activeChunkIndex}-${idx}`}
+              style={{
+                display: "inline-block",
+                fontSize: 48,
+                fontWeight: 900,
+                letterSpacing: -0.5,
+                lineHeight: 1.15,
+                padding: "6px 16px",
+                borderRadius: 14,
+                backgroundColor: isCurrent ? accent : "transparent",
+                color: isCurrent
+                  ? "#07111F"
+                  : isSpoken
+                  ? "#FFFFFF"
+                  : "rgba(255, 255, 255, 0.55)",
+                transform: isCurrent
+                  ? `scale(${interpolate(wordSpring, [0, 1], [0.92, 1.08])})`
+                  : "scale(1)",
+                textShadow: isCurrent
+                  ? "none"
+                  : "0 4px 12px rgba(0, 0, 0, 0.65)",
+              }}
+            >
+              {word.text}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const SceneSubtitle: React.FC<{
+  scene: VideoScene;
+  accent: string;
+  voiceSpeed: number;
+  subtitleStyle: SubtitleStyle;
+}> = ({ scene, accent, voiceSpeed, subtitleStyle }) => {
+  if (subtitleStyle === "classic") {
+    return <ClassicSubtitle text={scene.subtitle} accent={accent} />;
+  }
+  return (
+    <DynamicSubtitle
+      scene={scene}
+      accent={accent}
+      voiceSpeed={voiceSpeed}
+    />
+  );
+};
+
+type SceneCommonProps = {
+  scene: VideoScene;
+  theme: VideoTheme;
+  voiceSpeed: number;
+  subtitleStyle: SubtitleStyle;
+};
+
+const SceneHook: React.FC<SceneCommonProps> = ({
   scene,
   theme,
+  voiceSpeed,
+  subtitleStyle,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const pop = spring({ frame, fps, config: { damping: 14 } });
   const floatY = Math.sin(frame * 0.06) * 8;
+  const imgSrc = resolveMediaSrc(scene.imageUrl);
 
   return (
     <AbsoluteFill
@@ -143,9 +367,9 @@ const SceneHook: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
       </h1>
 
       <div style={{ transform: `translateY(${floatY}px)` }}>
-        {scene.imageUrl ? (
+        {imgSrc ? (
           <Img
-            src={scene.imageUrl}
+            src={imgSrc}
             style={{
               width: 560,
               height: 560,
@@ -188,14 +412,21 @@ const SceneHook: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
         )}
       </div>
 
-      <SubtitlePill text={scene.subtitle} accent={theme.accentColor} />
+      <SceneSubtitle
+        scene={scene}
+        accent={theme.accentColor}
+        voiceSpeed={voiceSpeed}
+        subtitleStyle={subtitleStyle}
+      />
     </AbsoluteFill>
   );
 };
 
-const SceneTactics: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
+const SceneTactics: React.FC<SceneCommonProps> = ({
   scene,
   theme,
+  voiceSpeed,
+  subtitleStyle,
 }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
@@ -337,18 +568,26 @@ const SceneTactics: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
         </div>
       )}
 
-      <SubtitlePill text={scene.subtitle} accent={theme.accentColor} />
+      <SceneSubtitle
+        scene={scene}
+        accent={theme.accentColor}
+        voiceSpeed={voiceSpeed}
+        subtitleStyle={subtitleStyle}
+      />
     </AbsoluteFill>
   );
 };
 
-const SceneVersus: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
+const SceneVersus: React.FC<SceneCommonProps> = ({
   scene,
   theme,
+  voiceSpeed,
+  subtitleStyle,
 }) => {
   const frame = useCurrentFrame();
   const leftTarget = Math.min(100, Math.max(5, scene.leftValue ?? 65));
   const rightTarget = Math.min(100, Math.max(5, scene.rightValue ?? 35));
+  const imgSrc = resolveMediaSrc(scene.imageUrl);
 
   const leftVal = interpolate(frame, [12, 62], [0, leftTarget], {
     extrapolateLeft: "clamp",
@@ -379,10 +618,10 @@ const SceneVersus: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
         </h2>
       </div>
 
-      {scene.imageUrl && (
+      {imgSrc && (
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 40 }}>
           <Img
-            src={scene.imageUrl}
+            src={imgSrc}
             style={{ width: 420, height: 340, objectFit: "contain", borderRadius: 24 }}
           />
         </div>
@@ -426,19 +665,27 @@ const SceneVersus: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
         </div>
       </div>
 
-      <SubtitlePill text={scene.subtitle} accent={theme.accentColor} />
+      <SceneSubtitle
+        scene={scene}
+        accent={theme.accentColor}
+        voiceSpeed={voiceSpeed}
+        subtitleStyle={subtitleStyle}
+      />
     </AbsoluteFill>
   );
 };
 
-const SceneHeadline: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
+const SceneHeadline: React.FC<SceneCommonProps> = ({
   scene,
   theme,
+  voiceSpeed,
+  subtitleStyle,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const cardIn = spring({ frame, fps, config: { damping: 14 } });
   const stampPop = spring({ frame: Math.max(0, frame - 24), fps, config: { damping: 11, stiffness: 190 } });
+  const imgSrc = resolveMediaSrc(scene.imageUrl);
 
   return (
     <AbsoluteFill
@@ -471,9 +718,9 @@ const SceneHeadline: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
           textAlign: "center",
         }}
       >
-        {scene.imageUrl && (
+        {imgSrc && (
           <Img
-            src={scene.imageUrl}
+            src={imgSrc}
             style={{ width: 320, height: 320, objectFit: "contain", marginBottom: 24, borderRadius: 20 }}
           />
         )}
@@ -503,14 +750,21 @@ const SceneHeadline: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
         )}
       </div>
 
-      <SubtitlePill text={scene.subtitle} accent={theme.accentColor} />
+      <SceneSubtitle
+        scene={scene}
+        accent={theme.accentColor}
+        voiceSpeed={voiceSpeed}
+        subtitleStyle={subtitleStyle}
+      />
     </AbsoluteFill>
   );
 };
 
-const SceneCta: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
+const SceneCta: React.FC<SceneCommonProps> = ({
   scene,
   theme,
+  voiceSpeed,
+  subtitleStyle,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -596,7 +850,12 @@ const SceneCta: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
         OPINA EN LOS COMENTARIOS ↓
       </div>
 
-      <SubtitlePill text={scene.subtitle} accent={theme.accentColor} />
+      <SceneSubtitle
+        scene={scene}
+        accent={theme.accentColor}
+        voiceSpeed={voiceSpeed}
+        subtitleStyle={subtitleStyle}
+      />
     </AbsoluteFill>
   );
 };
@@ -609,12 +868,15 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
     accentColor: spec.theme?.accentColor || "#EDBB00",
     bgColor: spec.theme?.bgColor || "#07111F",
   };
+  const voiceSpeed = spec.voiceSpeed || 1;
+  const subtitleStyle: SubtitleStyle = spec.subtitleStyle || "dynamic";
+  const resolvedGlobalAudio = resolveMediaSrc(audioUrl);
 
   let cursor = 0;
 
   return (
     <AbsoluteFill style={{ backgroundColor: theme.bgColor }}>
-      {audioUrl ? <Audio src={audioUrl} /> : null}
+      {resolvedGlobalAudio ? <Audio src={resolvedGlobalAudio} /> : null}
       {spec.scenes.map((scene, index) => {
         const durationInFrames = Math.max(
           30,
@@ -622,23 +884,59 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
         );
         const from = cursor;
         cursor += durationInFrames;
+        const resolvedSceneAudio = resolveMediaSrc(scene.audioUrl);
 
         return (
           <Sequence key={scene.id || index} from={from} durationInFrames={durationInFrames}>
-            {!audioUrl && scene.audioUrl ? (
+            {!resolvedGlobalAudio && resolvedSceneAudio ? (
               <Sequence from={SCENE_LEAD_IN_FRAMES}>
                 <Audio
-                  src={scene.audioUrl}
-                  playbackRate={spec.voiceSpeed || 1}
+                  src={resolvedSceneAudio}
+                  playbackRate={voiceSpeed}
                 />
               </Sequence>
             ) : null}
             <SceneFade isFirst={index === 0}>
-              {scene.type === "hook" && <SceneHook scene={scene} theme={theme} />}
-              {scene.type === "tactics" && <SceneTactics scene={scene} theme={theme} />}
-              {scene.type === "versus" && <SceneVersus scene={scene} theme={theme} />}
-              {scene.type === "headline" && <SceneHeadline scene={scene} theme={theme} />}
-              {scene.type === "cta" && <SceneCta scene={scene} theme={theme} />}
+              {scene.type === "hook" && (
+                <SceneHook
+                  scene={scene}
+                  theme={theme}
+                  voiceSpeed={voiceSpeed}
+                  subtitleStyle={subtitleStyle}
+                />
+              )}
+              {scene.type === "tactics" && (
+                <SceneTactics
+                  scene={scene}
+                  theme={theme}
+                  voiceSpeed={voiceSpeed}
+                  subtitleStyle={subtitleStyle}
+                />
+              )}
+              {scene.type === "versus" && (
+                <SceneVersus
+                  scene={scene}
+                  theme={theme}
+                  voiceSpeed={voiceSpeed}
+                  subtitleStyle={subtitleStyle}
+                />
+              )}
+              {scene.type === "headline" && (
+                <SceneHeadline
+                  scene={scene}
+                  theme={theme}
+                  voiceSpeed={voiceSpeed}
+                  subtitleStyle={subtitleStyle}
+                />
+              )}
+              {scene.type === "cta" && (
+                <SceneCta
+                  scene={scene}
+                  theme={theme}
+                  voiceSpeed={voiceSpeed}
+                  subtitleStyle={subtitleStyle}
+                />
+              )}
             </SceneFade>
           </Sequence>
         );
