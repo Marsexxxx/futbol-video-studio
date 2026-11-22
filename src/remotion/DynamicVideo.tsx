@@ -583,6 +583,7 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
 
         return (
           <Sequence key={scene.id || index} from={from} durationInFrames={durationInFrames}>
+            {!audioUrl && scene.audioUrl ? <Audio src={scene.audioUrl} /> : null}
             {scene.type === "hook" && <SceneHook scene={scene} theme={theme} />}
             {scene.type === "tactics" && <SceneTactics scene={scene} theme={theme} />}
             {scene.type === "versus" && <SceneVersus scene={scene} theme={theme} />}

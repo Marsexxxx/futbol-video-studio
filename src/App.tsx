@@ -9,6 +9,7 @@ import {
   Plus,
   Image as ImageIcon,
   Mic,
+  Volume2,
 } from "lucide-react";
 import { DynamicVideo } from "./remotion/DynamicVideo";
 import { DEFAULT_VIDEO_SPEC } from "./defaultVideo";
@@ -16,18 +17,88 @@ import { SceneType, VideoScene, VideoSpec } from "./types";
 
 const FPS = 30;
 
+const VOICE_OPTIONS = [
+  { id: "es-MX-JorgeNeural", label: "Jorge · México (Masculino)" },
+  { id: "es-MX-DaliaNeural", label: "Dalia · México (Femenino)" },
+  { id: "es-ES-AlvaroNeural", label: "Álvaro · España (Masculino)" },
+  { id: "es-AR-TomasNeural", label: "Tomás · Argentina (Masculino)" },
+];
+
 type GenerateResponse = Partial<VideoSpec> & {
   error?: string;
   errorMessage?: string;
   message?: string;
 };
 
+type TtsResponse = {
+  audioBase64?: string;
+  mimeType?: string;
+  provider?: string;
+  error?: string;
+};
+
+function base64ToBlobUrl(base64: string, mimeType: string): string {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const blob = new Blob([bytes], { type: mimeType });
+  return URL.createObjectURL(blob);
+}
+
+function measureAudioDuration(url: string): Promise<number> {
+  return new Promise((resolve) => {
+    const audio = new window.Audio();
+    audio.preload = "metadata";
+    audio.onloadedmetadata = () => {
+      const duration = Number.isFinite(audio.duration) ? audio.duration : 5;
+      resolve(duration);
+    };
+    audio.onerror = () => resolve(5);
+    audio.src = url;
+  });
+}
+
+async function fetchSceneVoice(
+  text: string,
+  voice: string,
+  rate: string
+): Promise<{ audioUrl: string; durationSeconds: number }> {
+  const res = await fetch("/.netlify/functions/generate-tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, voice, rate }),
+  });
+
+  const data: TtsResponse = await res.json();
+  if (!res.ok || !data.audioBase64) {
+    throw new Error(data.error || "No se pudo generar el audio de la escena.");
+  }
+
+  const audioUrl = base64ToBlobUrl(data.audioBase64, data.mimeType || "audio/mpeg");
+  const audioDuration = await measureAudioDuration(audioUrl);
+  const durationSeconds = Math.max(
+    2.5,
+    Math.ceil((audioDuration + 0.45) * 10) / 10
+  );
+
+  return { audioUrl, durationSeconds };
+}
+
 export function App() {
   const [spec, setSpec] = useState<VideoSpec>(DEFAULT_VIDEO_SPEC);
   const [prompt, setPrompt] = useState("");
   const [targetDuration, setTargetDuration] = useState(35);
   const [loading, setLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [voice, setVoice] = useState("es-MX-JorgeNeural");
+  const [voiceRate, setVoiceRate] = useState("+8%");
+  const [autoVoice, setAutoVoice] = useState(true);
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [sceneVoiceLoading, setSceneVoiceLoading] = useState<number | null>(null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioName, setAudioName] = useState<string | null>(null);
 
@@ -41,12 +112,80 @@ export function App() {
 
   const totalSeconds = (totalFrames / FPS).toFixed(1);
 
+  const syncedScenesCount = useMemo(
+    () => spec.scenes.filter((s) => Boolean(s.audioUrl)).length,
+    [spec]
+  );
+
+  const generateAllVoices = async (
+    targetSpec: VideoSpec,
+    selectedVoice = voice,
+    selectedRate = voiceRate
+  ) => {
+    setVoiceLoading(true);
+    setVoiceError(null);
+
+    try {
+      const updatedScenes = await Promise.all(
+        targetSpec.scenes.map(async (scene) => {
+          const textToSpeak = (scene.subtitle || scene.title || "").trim();
+          if (!textToSpeak) return scene;
+          const result = await fetchSceneVoice(textToSpeak, selectedVoice, selectedRate);
+          if (scene.audioUrl && scene.audioUrl.startsWith("blob:")) {
+            URL.revokeObjectURL(scene.audioUrl);
+          }
+          return {
+            ...scene,
+            audioUrl: result.audioUrl,
+            durationSeconds: result.durationSeconds,
+          };
+        })
+      );
+
+      setSpec({ ...targetSpec, scenes: updatedScenes });
+    } catch (err) {
+      setVoiceError(
+        err instanceof Error ? err.message : "Error al generar las voces con IA."
+      );
+    } finally {
+      setVoiceLoading(false);
+    }
+  };
+
+  const regenerateSingleSceneVoice = async (index: number) => {
+    const scene = spec.scenes[index];
+    const textToSpeak = (scene?.subtitle || scene?.title || "").trim();
+    if (!scene || !textToSpeak) return;
+
+    setSceneVoiceLoading(index);
+    setVoiceError(null);
+
+    try {
+      const result = await fetchSceneVoice(textToSpeak, voice, voiceRate);
+      if (scene.audioUrl && scene.audioUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(scene.audioUrl);
+      }
+      updateScene(index, {
+        audioUrl: result.audioUrl,
+        durationSeconds: result.durationSeconds,
+      });
+    } catch (err) {
+      setVoiceError(
+        err instanceof Error ? err.message : "No se pudo regenerar la voz."
+      );
+    } finally {
+      setSceneVoiceLoading(null);
+    }
+  };
+
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim()) return;
 
     setLoading(true);
+    setLoadingStep("Creando guion con Gemini...");
     setError(null);
+    setVoiceError(null);
 
     try {
       const res = await fetch("/api/generate-video", {
@@ -76,11 +215,18 @@ export function App() {
         throw new Error("La respuesta no incluyó escenas válidas.");
       }
 
-      setSpec(data as VideoSpec);
+      const generatedSpec = data as VideoSpec;
+      setSpec(generatedSpec);
+
+      if (autoVoice && !audioUrl) {
+        setLoadingStep("Generando voz sincronizada...");
+        await generateAllVoices(generatedSpec);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error de conexión con Gemini.");
     } finally {
       setLoading(false);
+      setLoadingStep("");
     }
   };
 
@@ -134,7 +280,11 @@ export function App() {
   };
 
   const downloadJson = () => {
-    const blob = new Blob([JSON.stringify(spec, null, 2)], {
+    const cleanSpec: VideoSpec = {
+      ...spec,
+      scenes: spec.scenes.map(({ audioUrl: _a, ...rest }) => rest),
+    };
+    const blob = new Blob([JSON.stringify(cleanSpec, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -194,23 +344,70 @@ export function App() {
                 />
                 <span>seg</span>
               </label>
-              <button type="submit" className="btn-primary" disabled={loading}>
+              <button type="submit" className="btn-primary" disabled={loading || voiceLoading}>
                 <Sparkles size={16} />
-                {loading ? "Generando..." : "Crear video"}
+                {loading ? loadingStep || "Generando..." : "Crear video"}
               </button>
             </div>
             {error && <div className="error-banner">{error}</div>}
           </form>
 
           <div className="card">
-            <div className="card-title">
-              <Mic size={16} />
-              <span>Tu voz en off (Audio local)</span>
+            <div className="card-header-between">
+              <div className="card-title">
+                <Volume2 size={16} />
+                <span>Voz en off (IA sincronizada o audio propio)</span>
+              </div>
+              {!audioUrl && syncedScenesCount > 0 && (
+                <span className="status-badge">
+                  Voz IA lista ({syncedScenesCount}/{spec.scenes.length})
+                </span>
+              )}
+              {audioUrl && <span className="status-badge">Usando tu audio</span>}
             </div>
+
+            <div className="voice-controls">
+              <select value={voice} onChange={(e) => setVoice(e.target.value)}>
+                {VOICE_OPTIONS.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.label}
+                  </option>
+                ))}
+              </select>
+
+              <select value={voiceRate} onChange={(e) => setVoiceRate(e.target.value)}>
+                <option value="+0%">Velocidad normal</option>
+                <option value="+8%">Dinámica (+8%)</option>
+                <option value="+15%">Rápida (+15%)</option>
+              </select>
+
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={voiceLoading || loading}
+                onClick={() => generateAllVoices(spec)}
+              >
+                <Volume2 size={15} />
+                {voiceLoading ? "Generando voz..." : "Generar voz IA"}
+              </button>
+            </div>
+
+            <div className="audio-row">
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={autoVoice}
+                  onChange={(e) => setAutoVoice(e.target.checked)}
+                />
+                <span>Generar voz IA automáticamente al crear video</span>
+              </label>
+            </div>
+
             <div className="audio-row">
               <label className="btn-secondary file-label">
-                <Upload size={15} />
-                <span>{audioName ? "Cambiar audio" : "Subir .mp3 / .wav"}</span>
+                <Mic size={15} />
+                <Upload size={14} />
+                <span>{audioName ? "Cambiar mi voz" : "Subir mi voz (.mp3 / .wav)"}</span>
                 <input type="file" accept="audio/*" hidden onChange={handleAudioUpload} />
               </label>
               {audioName && (
@@ -230,6 +427,7 @@ export function App() {
                 </div>
               )}
             </div>
+            {voiceError && <div className="error-banner">{voiceError}</div>}
           </div>
 
           <div className="card">
@@ -264,7 +462,8 @@ export function App() {
                       type="number"
                       className="sec-input"
                       min={2}
-                      max={20}
+                      max={25}
+                      step={0.5}
                       value={scene.durationSeconds}
                       onChange={(e) =>
                         updateScene(index, {
@@ -273,6 +472,15 @@ export function App() {
                       }
                     />
                     <span className="unit">s</span>
+                    <button
+                      type="button"
+                      className={`icon-btn ${scene.audioUrl ? "active-voice" : ""}`}
+                      title="Generar o actualizar voz de esta escena"
+                      disabled={sceneVoiceLoading === index || voiceLoading}
+                      onClick={() => regenerateSingleSceneVoice(index)}
+                    >
+                      <Volume2 size={15} />
+                    </button>
                     <label className="icon-btn" title="Añadir ilustración/imagen">
                       <ImageIcon size={15} />
                       <input
@@ -302,7 +510,7 @@ export function App() {
                     rows={2}
                     value={scene.subtitle}
                     onChange={(e) => updateScene(index, { subtitle: e.target.value })}
-                    placeholder="Subtítulo en pantalla"
+                    placeholder="Texto narrado y subtítulo en pantalla"
                   />
                 </div>
               ))}

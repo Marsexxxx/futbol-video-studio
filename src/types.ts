@@ -17,6 +17,7 @@ export interface VideoScene {
   bullets?: string[];
   tacticCaption?: string;
   imageUrl?: string;
+  audioUrl?: string;
 }
 
 export interface VideoTheme {
