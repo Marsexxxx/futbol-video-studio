@@ -1,0 +1,65 @@
+import { VideoSpec } from "./types";
+
+export const DEFAULT_VIDEO_SPEC: VideoSpec = {
+  title: "Lamine Yamal: El desequilibrio por banda",
+  theme: {
+    primaryColor: "#004D98",
+    secondaryColor: "#A50044",
+    accentColor: "#EDBB00",
+    bgColor: "#07111F",
+  },
+  scenes: [
+    {
+      id: "s1",
+      type: "hook",
+      durationSeconds: 5,
+      badge: "ANÁLISIS CULÉ",
+      title: "EL EFECTO LAMINE",
+      subtitle: "Así rompe el Barça defensas cerradas con un solo desmarque por banda.",
+      jerseyNumber: "19",
+    },
+    {
+      id: "s2",
+      type: "tactics",
+      durationSeconds: 7,
+      badge: "PIZARRA TÁCTICA",
+      title: "FIJAR Y ATACAR EL PASILLO",
+      subtitle: "El 9 arrastra al central y deja el mano a mano limpio en la derecha.",
+      tacticCaption: "Diagonal interior tras pase filtrado desde mediocampo.",
+    },
+    {
+      id: "s3",
+      type: "versus",
+      durationSeconds: 6,
+      badge: "IMPACTO EN PARTIDO",
+      title: "DOMINIO EN CAMPO RIVAL",
+      subtitle: "Cuando el balón pasa por banda derecha se multiplica el peligro real.",
+      leftLabel: "Ataques por derecha",
+      leftValue: 64,
+      rightLabel: "Resto de zonas",
+      rightValue: 36,
+    },
+    {
+      id: "s4",
+      type: "headline",
+      durationSeconds: 5,
+      badge: "DATO CLAVE",
+      title: "GENERACIÓN DE OCASIONES",
+      subtitle: "Cada recepción pegado a la cal obliga a doble marca del rival.",
+      highlightValue: "+78%",
+      stampText: "DESEQUILIBRIO",
+    },
+    {
+      id: "s5",
+      type: "cta",
+      durationSeconds: 5,
+      badge: "DEBATE",
+      title: "¿ES YA EL MÁS DECISIVO?",
+      subtitle: "Cuéntame en los comentarios qué jugador analizamos en el próximo video.",
+      bullets: [
+        "Amplitud constante que abre el bloque bajo",
+        "Último pase y disparo a pierna cambiada",
+      ],
+    },
+  ],
+};
