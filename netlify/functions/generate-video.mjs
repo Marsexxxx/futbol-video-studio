@@ -1,10 +1,7 @@
 async function requestModel(model, apiKey, payload, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const isVertexKey = apiKey.startsWith("AQ.");
-  const url = isVertexKey
-    ? `https://aiplatform.googleapis.com/v1/publishers/google/models/${model}:generateContent?key=${apiKey}`
-    : `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   try {
     const response = await fetch(url, {
@@ -92,7 +89,7 @@ export default async (req) => {
 Usa entre 4 y 5 escenas que sumen cerca de ${durationSeconds} segundos. Empieza con "hook" y termina con "cta".`;
 
     const payload = {
-      systemInstruction: { parts: [{ text: systemInstruction }] },
+      system_instruction: { parts: [{ text: systemInstruction }] },
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: "application/json",
