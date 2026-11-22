@@ -348,3 +348,15 @@ select:focus {
     grid-template-columns: 1fr;
   }
 }
+
+.voice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .voice-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -12,9 +12,42 @@ import {
 } from "remotion";
 import { VideoScene, VideoSpec, VideoTheme } from "../types";
 
+export const SCENE_LEAD_IN_FRAMES = 6;
+
 export type DynamicVideoProps = {
   spec: VideoSpec;
   audioUrl?: string | null;
+};
+
+const SceneFade: React.FC<{ children: React.ReactNode; isFirst: boolean }> = ({
+  children,
+  isFirst,
+}) => {
+  const frame = useCurrentFrame();
+  const { durationInFrames } = useVideoConfig();
+
+  const fadeIn = isFirst
+    ? 1
+    : interpolate(frame, [0, 6], [0, 1], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+      });
+
+  const fadeOut = interpolate(
+    frame,
+    [Math.max(0, durationInFrames - 6), durationInFrames],
+    [1, 0.85],
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    }
+  );
+
+  return (
+    <AbsoluteFill style={{ opacity: Math.min(fadeIn, fadeOut) }}>
+      {children}
+    </AbsoluteFill>
+  );
 };
 
 const SubtitlePill: React.FC<{ text: string; accent: string }> = ({
@@ -23,7 +56,11 @@ const SubtitlePill: React.FC<{ text: string; accent: string }> = ({
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const enter = spring({ frame, fps, config: { damping: 18, stiffness: 160 } });
+  const enter = spring({
+    frame: Math.max(0, frame - 4),
+    fps,
+    config: { damping: 18, stiffness: 160 },
+  });
 
   if (!text) return null;
 
@@ -161,11 +198,13 @@ const SceneTactics: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
   theme,
 }) => {
   const frame = useCurrentFrame();
-  const move = interpolate(frame, [15, 130], [0, 1], {
+  const { durationInFrames } = useVideoConfig();
+  const p = interpolate(frame, [10, Math.max(40, durationInFrames - 18)], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
-    easing: Easing.inOut(Easing.cubic),
   });
+
+  const move = Easing.inOut(Easing.cubic)(Math.min(1, p * 1.15));
 
   const p6X = 450;
   const p6Y = interpolate(move, [0, 1], [720, 620]);
@@ -176,37 +215,37 @@ const SceneTactics: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
   const p19X = interpolate(move, [0, 1], [755, 585]);
   const p19Y = interpolate(move, [0, 1], [500, 245]);
 
-  const pass1 = interpolate(frame, [20, 58], [260, 0], {
+  const pass1 = interpolate(p, [0.05, 0.35], [260, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const pass2 = interpolate(frame, [66, 115], [340, 0], {
+  const pass2 = interpolate(p, [0.38, 0.72], [340, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const shot = interpolate(frame, [120, 155], [240, 0], {
+  const shot = interpolate(p, [0.75, 0.98], [240, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
   let ballX = p6X;
   let ballY = p6Y - 28;
-  if (frame >= 20 && frame < 66) {
-    const t = interpolate(frame, [20, 58], [0, 1], {
+  if (p >= 0.05 && p < 0.38) {
+    const t = interpolate(p, [0.05, 0.35], [0, 1], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
     });
     ballX = interpolate(t, [0, 1], [p6X, p8X]);
     ballY = interpolate(t, [0, 1], [p6Y, p8Y]);
-  } else if (frame >= 66 && frame < 120) {
-    const t = interpolate(frame, [66, 115], [0, 1], {
+  } else if (p >= 0.38 && p < 0.75) {
+    const t = interpolate(p, [0.38, 0.72], [0, 1], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
     });
     ballX = interpolate(t, [0, 1], [p8X, p19X]);
     ballY = interpolate(t, [0, 1], [p8Y, p19Y]);
-  } else if (frame >= 120) {
-    const t = interpolate(frame, [120, 155], [0, 1], {
+  } else if (p >= 0.75) {
+    const t = interpolate(p, [0.75, 0.98], [0, 1], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
     });
@@ -269,11 +308,11 @@ const SceneTactics: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
           <circle key={i} cx={d.x} cy={d.y} r="27" fill="#E2E8F0" stroke="#0F172A" strokeWidth="4" />
         ))}
 
-        {attackers.map((p) => (
-          <g key={p.label}>
-            <circle cx={p.x} cy={p.y} r="34" fill={theme.primaryColor} stroke={theme.secondaryColor} strokeWidth="6" />
-            <text x={p.x} y={p.y + 10} textAnchor="middle" fill="#FFFFFF" fontSize="27" fontWeight="900">
-              {p.label}
+        {attackers.map((pItem) => (
+          <g key={pItem.label}>
+            <circle cx={pItem.x} cy={pItem.y} r="34" fill={theme.primaryColor} stroke={theme.secondaryColor} strokeWidth="6" />
+            <text x={pItem.x} y={pItem.y + 10} textAnchor="middle" fill="#FFFFFF" fontSize="27" fontWeight="900">
+              {pItem.label}
             </text>
           </g>
         ))}
@@ -311,12 +350,12 @@ const SceneVersus: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
   const leftTarget = Math.min(100, Math.max(5, scene.leftValue ?? 65));
   const rightTarget = Math.min(100, Math.max(5, scene.rightValue ?? 35));
 
-  const leftVal = interpolate(frame, [15, 75], [0, leftTarget], {
+  const leftVal = interpolate(frame, [12, 62], [0, leftTarget], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
     easing: Easing.out(Easing.cubic),
   });
-  const rightVal = interpolate(frame, [15, 75], [0, rightTarget], {
+  const rightVal = interpolate(frame, [12, 62], [0, rightTarget], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
     easing: Easing.out(Easing.cubic),
@@ -399,7 +438,7 @@ const SceneHeadline: React.FC<{ scene: VideoScene; theme: VideoTheme }> = ({
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const cardIn = spring({ frame, fps, config: { damping: 14 } });
-  const stampPop = spring({ frame: Math.max(0, frame - 28), fps, config: { damping: 11, stiffness: 190 } });
+  const stampPop = spring({ frame: Math.max(0, frame - 24), fps, config: { damping: 11, stiffness: 190 } });
 
   return (
     <AbsoluteFill
@@ -577,18 +616,30 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
     <AbsoluteFill style={{ backgroundColor: theme.bgColor }}>
       {audioUrl ? <Audio src={audioUrl} /> : null}
       {spec.scenes.map((scene, index) => {
-        const durationInFrames = Math.max(30, Math.round((scene.durationSeconds || 5) * fps));
+        const durationInFrames = Math.max(
+          30,
+          Math.ceil((scene.durationSeconds || 5) * fps)
+        );
         const from = cursor;
         cursor += durationInFrames;
 
         return (
           <Sequence key={scene.id || index} from={from} durationInFrames={durationInFrames}>
-            {!audioUrl && scene.audioUrl ? <Audio src={scene.audioUrl} /> : null}
-            {scene.type === "hook" && <SceneHook scene={scene} theme={theme} />}
-            {scene.type === "tactics" && <SceneTactics scene={scene} theme={theme} />}
-            {scene.type === "versus" && <SceneVersus scene={scene} theme={theme} />}
-            {scene.type === "headline" && <SceneHeadline scene={scene} theme={theme} />}
-            {scene.type === "cta" && <SceneCta scene={scene} theme={theme} />}
+            {!audioUrl && scene.audioUrl ? (
+              <Sequence from={SCENE_LEAD_IN_FRAMES}>
+                <Audio
+                  src={scene.audioUrl}
+                  playbackRate={spec.voiceSpeed || 1}
+                />
+              </Sequence>
+            ) : null}
+            <SceneFade isFirst={index === 0}>
+              {scene.type === "hook" && <SceneHook scene={scene} theme={theme} />}
+              {scene.type === "tactics" && <SceneTactics scene={scene} theme={theme} />}
+              {scene.type === "versus" && <SceneVersus scene={scene} theme={theme} />}
+              {scene.type === "headline" && <SceneHeadline scene={scene} theme={theme} />}
+              {scene.type === "cta" && <SceneCta scene={scene} theme={theme} />}
+            </SceneFade>
           </Sequence>
         );
       })}

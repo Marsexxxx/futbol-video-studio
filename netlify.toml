@@ -7,6 +7,10 @@
   path = "/api/generate-video"
   function = "generate-video"
 
+[[edge_functions]]
+  path = "/api/generate-tts"
+  function = "generate-tts"
+
 [dev]
   command = "npm run dev"
   targetPort = 5173

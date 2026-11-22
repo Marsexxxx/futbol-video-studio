@@ -11,25 +11,42 @@ import {
   Mic,
   Volume2,
 } from "lucide-react";
-import { DynamicVideo } from "./remotion/DynamicVideo";
+import { DynamicVideo, SCENE_LEAD_IN_FRAMES } from "./remotion/DynamicVideo";
 import { DEFAULT_VIDEO_SPEC } from "./defaultVideo";
 import { SceneType, VideoScene, VideoSpec } from "./types";
 
 const FPS = 30;
+const LEAD_IN_SEC = SCENE_LEAD_IN_FRAMES / FPS;
+const TAIL_PAUSE_SEC = 0.75;
 
 const VOICE_OPTIONS = [
-  { id: "es-MX-JorgeNeural", label: "Jorge · México (Masculino)" },
-  { id: "es-MX-DaliaNeural", label: "Dalia · México (Femenino)" },
-  { id: "es-ES-AlvaroNeural", label: "Álvaro · España (Masculino)" },
-  { id: "es-AR-TomasNeural", label: "Tomás · Argentina (Masculino)" },
+  { id: "Fenrir", label: "Fenrir · Energético (Deportes)" },
+  { id: "Puck", label: "Puck · Dinámico y juvenil" },
+  { id: "Charon", label: "Charon · Grave y analítico" },
+  { id: "Orus", label: "Orus · Firme y directo" },
+  { id: "Kore", label: "Kore · Femenina clara" },
+  { id: "Zephyr", label: "Zephyr · Femenina energética" },
+];
+
+const ACCENT_OPTIONS = [
+  { id: "es-MX", label: "Acento México" },
+  { id: "es-ES", label: "Acento España" },
+  { id: "es-AR", label: "Acento Argentina" },
+  { id: "es-US", label: "Latino neutro" },
+];
+
+const STYLE_OPTIONS = [
+  { id: "tiktok", label: "Estilo Reels / TikTok" },
+  { id: "analyst", label: "Estilo Analista táctico" },
+  { id: "hype", label: "Estilo Narrador intenso" },
 ];
 
 const SPEED_OPTIONS = [
-  { value: 1.0, label: "1.0x Normal" },
-  { value: 1.15, label: "1.15x Ágil" },
-  { value: 1.25, label: "1.25x Reels / TikTok" },
-  { value: 1.35, label: "1.35x Rápida" },
-  { value: 1.5, label: "1.5x Muy rápida" },
+  { value: 0.95, label: "0.95x Pausada" },
+  { value: 1.0, label: "1.0x Natural (Recomendada)" },
+  { value: 1.1, label: "1.1x Ágil" },
+  { value: 1.2, label: "1.2x Rápida" },
+  { value: 1.3, label: "1.3x Muy rápida" },
 ];
 
 type GenerateResponse = Partial<VideoSpec> & {
@@ -41,40 +58,70 @@ type GenerateResponse = Partial<VideoSpec> & {
 type TtsResponse = {
   audioBase64?: string;
   mimeType?: string;
+  durationSeconds?: number | null;
   provider?: string;
   error?: string;
 };
 
-function calcDuration(rawAudioDuration: number, speed: number): number {
-  return Math.max(2, Math.ceil((rawAudioDuration / speed + 0.3) * 10) / 10);
+function calcSceneDuration(rawAudioDuration: number, speed: number): number {
+  const total = LEAD_IN_SEC + rawAudioDuration / speed + TAIL_PAUSE_SEC;
+  return Number(Math.max(2.5, Math.ceil(total * 20) / 20).toFixed(2));
 }
 
-function base64ToBlobUrl(base64: string, mimeType: string): string {
+function base64ToBytes(base64: string): Uint8Array {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i);
   }
-  const blob = new Blob([bytes], { type: mimeType });
-  return URL.createObjectURL(blob);
+  return bytes;
 }
 
-function measureAudioDuration(url: string): Promise<number> {
+async function measureExactAudioDuration(
+  bytes: Uint8Array,
+  blobUrl: string,
+  serverDuration?: number | null
+): Promise<number> {
+  if (typeof serverDuration === "number" && Number.isFinite(serverDuration) && serverDuration > 0.2) {
+    return serverDuration;
+  }
+
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext;
+    if (AudioCtx) {
+      const ctx = new AudioCtx();
+      const bufferCopy = bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength
+      ) as ArrayBuffer;
+      const decoded = await ctx.decodeAudioData(bufferCopy);
+      const duration = decoded.duration;
+      await ctx.close();
+      if (Number.isFinite(duration) && duration > 0.2) {
+        return duration;
+      }
+    }
+  } catch {}
+
   return new Promise((resolve) => {
     const audio = new window.Audio();
     audio.preload = "metadata";
     audio.onloadedmetadata = () => {
-      const duration = Number.isFinite(audio.duration) ? audio.duration : 5;
-      resolve(duration);
+      resolve(Number.isFinite(audio.duration) && audio.duration > 0.2 ? audio.duration : 5);
     };
     audio.onerror = () => resolve(5);
-    audio.src = url;
+    audio.src = blobUrl;
   });
 }
 
 async function fetchSceneVoice(
   text: string,
   voice: string,
+  languageCode: string,
+  style: string,
   speed: number
 ): Promise<{
   audioUrl: string;
@@ -82,44 +129,62 @@ async function fetchSceneVoice(
   durationSeconds: number;
   provider: string;
 }> {
-  const res = await fetch("/.netlify/functions/generate-tts", {
+  const res = await fetch("/api/generate-tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, voice }),
+    body: JSON.stringify({ text, voice, languageCode, style }),
   });
 
-  const data: TtsResponse = await res.json();
+  const raw = await res.text();
+  let data: TtsResponse = {};
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new Error(`Error TTS (${res.status}): ${raw.slice(0, 120)}`);
+  }
+
   if (!res.ok || !data.audioBase64) {
     throw new Error(data.error || "No se pudo generar el audio de la escena.");
   }
 
-  const audioUrl = base64ToBlobUrl(data.audioBase64, data.mimeType || "audio/mpeg");
-  const rawAudioDuration = await measureAudioDuration(audioUrl);
-  const durationSeconds = calcDuration(rawAudioDuration, speed);
+  const bytes = base64ToBytes(data.audioBase64);
+  const blob = new Blob([bytes.buffer as ArrayBuffer], {
+    type: data.mimeType || "audio/wav",
+  });
+  const audioUrl = URL.createObjectURL(blob);
+  const rawAudioDuration = await measureExactAudioDuration(
+    bytes,
+    audioUrl,
+    data.durationSeconds
+  );
+  const durationSeconds = calcSceneDuration(rawAudioDuration, speed);
 
   return {
     audioUrl,
     rawAudioDuration,
     durationSeconds,
-    provider: data.provider || "edge-tts",
+    provider: data.provider || "gemini-3.8-flash-lite-tts",
   };
 }
 
 export function App() {
   const [spec, setSpec] = useState<VideoSpec>({
     ...DEFAULT_VIDEO_SPEC,
-    voiceSpeed: 1.25,
+    voiceSpeed: 1.0,
   });
   const [prompt, setPrompt] = useState("");
   const [targetDuration, setTargetDuration] = useState(35);
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [voice, setVoice] = useState("es-MX-JorgeNeural");
-  const [voiceSpeed, setVoiceSpeed] = useState(1.25);
+  const [voice, setVoice] = useState("Fenrir");
+  const [accent, setAccent] = useState("es-MX");
+  const [voiceStyle, setVoiceStyle] = useState("tiktok");
+  const [voiceSpeed, setVoiceSpeed] = useState(1.0);
   const [voiceProvider, setVoiceProvider] = useState<string | null>(null);
   const [autoVoice, setAutoVoice] = useState(true);
   const [voiceLoading, setVoiceLoading] = useState(false);
+  const [voiceProgress, setVoiceProgress] = useState("");
   const [sceneVoiceLoading, setSceneVoiceLoading] = useState<number | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -127,7 +192,7 @@ export function App() {
 
   const totalFrames = useMemo(() => {
     const frames = spec.scenes.reduce(
-      (acc, scene) => acc + Math.max(30, Math.round((scene.durationSeconds || 5) * FPS)),
+      (acc, scene) => acc + Math.max(30, Math.ceil((scene.durationSeconds || 5) * FPS)),
       0
     );
     return Math.max(30, frames);
@@ -149,7 +214,7 @@ export function App() {
         scene.rawAudioDuration
           ? {
               ...scene,
-              durationSeconds: calcDuration(scene.rawAudioDuration, newSpeed),
+              durationSeconds: calcSceneDuration(scene.rawAudioDuration, newSpeed),
             }
           : scene
       ),
@@ -159,47 +224,58 @@ export function App() {
   const generateAllVoices = async (
     targetSpec: VideoSpec,
     selectedVoice = voice,
+    selectedAccent = accent,
+    selectedStyle = voiceStyle,
     selectedSpeed = voiceSpeed
   ) => {
     setVoiceLoading(true);
     setVoiceError(null);
 
     try {
-      let lastProvider = "edge-tts";
-      const updatedScenes = await Promise.all(
-        targetSpec.scenes.map(async (scene) => {
-          const textToSpeak = (scene.subtitle || scene.title || "").trim();
-          if (!textToSpeak) return scene;
-          const result = await fetchSceneVoice(
-            textToSpeak,
-            selectedVoice,
-            selectedSpeed
-          );
-          lastProvider = result.provider;
-          if (scene.audioUrl && scene.audioUrl.startsWith("blob:")) {
-            URL.revokeObjectURL(scene.audioUrl);
-          }
-          return {
-            ...scene,
-            audioUrl: result.audioUrl,
-            rawAudioDuration: result.rawAudioDuration,
-            durationSeconds: result.durationSeconds,
-          };
-        })
-      );
+      const updatedScenes = [...targetSpec.scenes];
+      let lastProvider = "gemini-3.8-flash-lite-tts";
+
+      for (let i = 0; i < updatedScenes.length; i++) {
+        const scene = updatedScenes[i];
+        const textToSpeak = (scene.subtitle || scene.title || "").trim();
+        if (!textToSpeak) continue;
+
+        setVoiceProgress(`Voz ${i + 1}/${updatedScenes.length}...`);
+        const result = await fetchSceneVoice(
+          textToSpeak,
+          selectedVoice,
+          selectedAccent,
+          selectedStyle,
+          selectedSpeed
+        );
+        lastProvider = result.provider;
+
+        if (scene.audioUrl && scene.audioUrl.startsWith("blob:")) {
+          URL.revokeObjectURL(scene.audioUrl);
+        }
+
+        updatedScenes[i] = {
+          ...scene,
+          audioUrl: result.audioUrl,
+          rawAudioDuration: result.rawAudioDuration,
+          durationSeconds: result.durationSeconds,
+        };
+
+        setSpec({
+          ...targetSpec,
+          voiceSpeed: selectedSpeed,
+          scenes: [...updatedScenes],
+        });
+      }
 
       setVoiceProvider(lastProvider);
-      setSpec({
-        ...targetSpec,
-        voiceSpeed: selectedSpeed,
-        scenes: updatedScenes,
-      });
     } catch (err) {
       setVoiceError(
-        err instanceof Error ? err.message : "Error al generar las voces con IA."
+        err instanceof Error ? err.message : "Error al generar las voces con Gemini."
       );
     } finally {
       setVoiceLoading(false);
+      setVoiceProgress("");
     }
   };
 
@@ -212,7 +288,13 @@ export function App() {
     setVoiceError(null);
 
     try {
-      const result = await fetchSceneVoice(textToSpeak, voice, voiceSpeed);
+      const result = await fetchSceneVoice(
+        textToSpeak,
+        voice,
+        accent,
+        voiceStyle,
+        voiceSpeed
+      );
       setVoiceProvider(result.provider);
       if (scene.audioUrl && scene.audioUrl.startsWith("blob:")) {
         URL.revokeObjectURL(scene.audioUrl);
@@ -275,8 +357,8 @@ export function App() {
       setSpec(generatedSpec);
 
       if (autoVoice && !audioUrl) {
-        setLoadingStep("Generando voz sincronizada...");
-        await generateAllVoices(generatedSpec, voice, voiceSpeed);
+        setLoadingStep("Generando voz de estudio...");
+        await generateAllVoices(generatedSpec, voice, accent, voiceStyle, voiceSpeed);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error de conexión con Gemini.");
@@ -414,22 +496,37 @@ export function App() {
             <div className="card-header-between">
               <div className="card-title">
                 <Volume2 size={16} />
-                <span>Voz en off (IA sincronizada o audio propio)</span>
+                <span>Voz en off (Gemini Studio TTS o audio propio)</span>
               </div>
               {!audioUrl && syncedScenesCount > 0 && (
                 <span className="status-badge">
-                  {voiceProvider === "google-tts" ? "Respaldo" : "Edge Neural"} ·{" "}
-                  {voiceSpeed}x ({syncedScenesCount}/{spec.scenes.length})
+                  {voiceProvider || "Gemini TTS"} · {voiceSpeed}x ({syncedScenesCount}/{spec.scenes.length})
                 </span>
               )}
               {audioUrl && <span className="status-badge">Usando tu audio</span>}
             </div>
 
-            <div className="voice-controls">
+            <div className="voice-grid">
               <select value={voice} onChange={(e) => setVoice(e.target.value)}>
                 {VOICE_OPTIONS.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.label}
+                  </option>
+                ))}
+              </select>
+
+              <select value={accent} onChange={(e) => setAccent(e.target.value)}>
+                {ACCENT_OPTIONS.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label}
+                  </option>
+                ))}
+              </select>
+
+              <select value={voiceStyle} onChange={(e) => setVoiceStyle(e.target.value)}>
+                {STYLE_OPTIONS.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
                   </option>
                 ))}
               </select>
@@ -444,36 +541,28 @@ export function App() {
                   </option>
                 ))}
               </select>
+            </div>
 
+            <div className="audio-row">
               <button
                 type="button"
                 className="btn-primary"
                 disabled={voiceLoading || loading}
-                onClick={() => generateAllVoices(spec, voice, voiceSpeed)}
+                onClick={() =>
+                  generateAllVoices(spec, voice, accent, voiceStyle, voiceSpeed)
+                }
               >
                 <Volume2 size={15} />
-                {voiceLoading ? "Generando voz..." : "Generar voz IA"}
+                {voiceLoading ? voiceProgress || "Generando voz..." : "Generar voz Gemini"}
               </button>
-            </div>
 
-            <div className="audio-row">
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={autoVoice}
-                  onChange={(e) => setAutoVoice(e.target.checked)}
-                />
-                <span>Generar voz IA automáticamente al crear video</span>
-              </label>
-            </div>
-
-            <div className="audio-row">
               <label className="btn-secondary file-label">
                 <Mic size={15} />
                 <Upload size={14} />
                 <span>{audioName ? "Cambiar mi voz" : "Subir mi voz (.mp3 / .wav)"}</span>
                 <input type="file" accept="audio/*" hidden onChange={handleAudioUpload} />
               </label>
+
               {audioName && (
                 <div className="audio-chip">
                   <span>{audioName}</span>
@@ -491,6 +580,18 @@ export function App() {
                 </div>
               )}
             </div>
+
+            <div className="audio-row">
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={autoVoice}
+                  onChange={(e) => setAutoVoice(e.target.checked)}
+                />
+                <span>Generar voz automáticamente al crear video</span>
+              </label>
+            </div>
+
             {voiceError && <div className="error-banner">{voiceError}</div>}
           </div>
 
@@ -526,8 +627,8 @@ export function App() {
                       type="number"
                       className="sec-input"
                       min={2}
-                      max={25}
-                      step={0.5}
+                      max={30}
+                      step={0.1}
                       value={scene.durationSeconds}
                       onChange={(e) =>
                         updateScene(index, {
