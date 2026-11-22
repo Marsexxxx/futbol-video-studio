@@ -1,70 +1,40 @@
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function requestModel(model, apiKey, payload, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const isVertexKey = apiKey.startsWith("AQ.");
+  const url = isVertexKey
+    ? `https://aiplatform.googleapis.com/v1/publishers/google/models/${model}:generateContent?key=${apiKey}`
+    : `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-async function callGeminiWithinBudget(url, payload) {
-  const startTime = Date.now();
-  const maxBudgetMs = 8500;
-  let lastStatus = 504;
-  let lastData = {};
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    const remainingMs = maxBudgetMs - (Date.now() - startTime);
-    if (remainingMs < 1500) {
+    clearTimeout(timer);
+    const text = await response.text();
+    let data = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { error: { message: text.slice(0, 180) } };
+    }
+
+    return { ok: response.ok, status: response.status, data };
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === "AbortError") {
       return {
         ok: false,
         status: 504,
-        data: { error: "Gemini tardó demasiado en responder. Intenta de nuevo." },
+        data: { error: { message: `El modelo ${model} excedió el tiempo límite.` } },
       };
     }
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), remainingMs);
-
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timer);
-      lastStatus = response.status;
-
-      const text = await response.text();
-      try {
-        lastData = text ? JSON.parse(text) : {};
-      } catch {
-        lastData = { error: { message: text.slice(0, 180) } };
-      }
-
-      if (response.ok) {
-        return { ok: true, status: response.status, data: lastData };
-      }
-
-      const isTemporary = response.status === 503 || response.status === 429;
-      const canRetry = isTemporary && attempt === 1 && Date.now() - startTime < 4500;
-      if (!canRetry) {
-        return { ok: false, status: response.status, data: lastData };
-      }
-
-      await sleep(700);
-    } catch (err) {
-      clearTimeout(timer);
-      if (err.name === "AbortError") {
-        return {
-          ok: false,
-          status: 504,
-          data: {
-            error:
-              "El modelo tardó más de 8 segundos (límite de Netlify). Intenta de nuevo o usa un prompt más corto.",
-          },
-        };
-      }
-      throw err;
-    }
+    throw err;
   }
-
-  return { ok: false, status: lastStatus, data: lastData };
 }
 
 export default async (req) => {
@@ -85,9 +55,15 @@ export default async (req) => {
 
   try {
     const { prompt, durationSeconds = 35 } = await req.json();
-    const model = (process.env.GEMINI_MODEL || "gemini-3.8-flash")
+    const primaryModel = (process.env.GEMINI_MODEL || "gemini-3.8-flash")
       .trim()
       .replace(/^models\//, "");
+    const fallbackList = (process.env.GEMINI_FALLBACK_MODELS || "")
+      .split(",")
+      .map((m) => m.trim().replace(/^models\//, ""))
+      .filter(Boolean);
+
+    const models = [...new Set([primaryModel, ...fallbackList])];
 
     const systemInstruction = `Devuelve SOLO JSON válido para un video vertical 9:16 de fútbol en español con este formato exacto:
 {
@@ -115,9 +91,8 @@ export default async (req) => {
 }
 Usa entre 4 y 5 escenas que sumen cerca de ${durationSeconds} segundos. Empieza con "hook" y termina con "cta".`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const payload = {
-      system_instruction: { parts: [{ text: systemInstruction }] },
+      systemInstruction: { parts: [{ text: systemInstruction }] },
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: "application/json",
@@ -126,25 +101,43 @@ Usa entre 4 y 5 escenas que sumen cerca de ${durationSeconds} segundos. Empieza 
       },
     };
 
-    const result = await callGeminiWithinBudget(url, payload);
+    const startTime = Date.now();
+    const maxBudgetMs = 8800;
+    let lastResult = { ok: false, status: 503, data: {} };
+    let usedModel = primaryModel;
 
-    if (!result.ok) {
+    for (const model of models) {
+      const remainingMs = maxBudgetMs - (Date.now() - startTime);
+      if (remainingMs < 1800) break;
+
+      usedModel = model;
+      lastResult = await requestModel(model, apiKey, payload, remainingMs);
+
+      if (lastResult.ok) break;
+      const shouldFallback =
+        lastResult.status === 503 ||
+        lastResult.status === 429 ||
+        lastResult.status === 404;
+      if (!shouldFallback) break;
+    }
+
+    if (!lastResult.ok) {
       const apiMsg =
-        typeof result.data?.error === "string"
-          ? result.data.error
-          : result.data?.error?.message;
+        typeof lastResult.data?.error === "string"
+          ? lastResult.data.error
+          : lastResult.data?.error?.message;
       return new Response(
         JSON.stringify({
           error:
-            result.status === 503
-              ? `El modelo ${model} está saturado (503). Intenta de nuevo en unos segundos.`
-              : apiMsg || `Error ${result.status} al consultar Gemini (${model}).`,
+            lastResult.status === 503
+              ? `El modelo ${usedModel} está saturado (503). Intenta de nuevo en unos segundos.`
+              : apiMsg || `Error ${lastResult.status} al consultar Gemini (${usedModel}).`,
         }),
-        { status: result.status, headers: { "Content-Type": "application/json" } }
+        { status: lastResult.status, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    const rawText = result.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const rawText = lastResult.data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!rawText) {
       return new Response(
         JSON.stringify({ error: "Gemini respondió vacío sin texto." }),
