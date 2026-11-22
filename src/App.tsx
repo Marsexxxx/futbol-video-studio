@@ -49,7 +49,7 @@ export function App() {
     setError(null);
 
     try {
-      const res = await fetch("/.netlify/functions/generate-video", {
+      const res = await fetch("/api/generate-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt, durationSeconds: targetDuration }),

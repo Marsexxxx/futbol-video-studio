@@ -3,6 +3,10 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[[edge_functions]]
+  path = "/api/generate-video"
+  function = "generate-video"
+
 [dev]
   command = "npm run dev"
   targetPort = 5173
