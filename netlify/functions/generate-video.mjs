@@ -1,35 +1,70 @@
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function callGeminiWithRetry(url, payload, maxAttempts = 3) {
-  let response;
-  let data = {};
+async function callGeminiWithinBudget(url, payload) {
+  const startTime = Date.now();
+  const maxBudgetMs = 8500;
+  let lastStatus = 504;
+  let lastData = {};
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const remainingMs = maxBudgetMs - (Date.now() - startTime);
+    if (remainingMs < 1500) {
+      return {
+        ok: false,
+        status: 504,
+        data: { error: "Gemini tardó demasiado en responder. Intenta de nuevo." },
+      };
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), remainingMs);
 
     try {
-      data = await response.json();
-    } catch {
-      data = {};
-    }
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
 
-    if (response.ok) {
-      return { response, data };
-    }
+      clearTimeout(timer);
+      lastStatus = response.status;
 
-    const isTemporary = response.status === 503 || response.status === 429;
-    if (!isTemporary || attempt === maxAttempts) {
-      return { response, data };
-    }
+      const text = await response.text();
+      try {
+        lastData = text ? JSON.parse(text) : {};
+      } catch {
+        lastData = { error: { message: text.slice(0, 180) } };
+      }
 
-    await sleep(attempt * 1200);
+      if (response.ok) {
+        return { ok: true, status: response.status, data: lastData };
+      }
+
+      const isTemporary = response.status === 503 || response.status === 429;
+      const canRetry = isTemporary && attempt === 1 && Date.now() - startTime < 4500;
+      if (!canRetry) {
+        return { ok: false, status: response.status, data: lastData };
+      }
+
+      await sleep(700);
+    } catch (err) {
+      clearTimeout(timer);
+      if (err.name === "AbortError") {
+        return {
+          ok: false,
+          status: 504,
+          data: {
+            error:
+              "El modelo tardó más de 8 segundos (límite de Netlify). Intenta de nuevo o usa un prompt más corto.",
+          },
+        };
+      }
+      throw err;
+    }
   }
 
-  return { response, data };
+  return { ok: false, status: lastStatus, data: lastData };
 }
 
 export default async (req) => {
@@ -40,7 +75,7 @@ export default async (req) => {
     });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = (process.env.GEMINI_API_KEY || "").trim();
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Falta configurar GEMINI_API_KEY en Netlify." }),
@@ -50,45 +85,35 @@ export default async (req) => {
 
   try {
     const { prompt, durationSeconds = 35 } = await req.json();
-    const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+    const model = (process.env.GEMINI_MODEL || "gemini-3.8-flash")
+      .trim()
+      .replace(/^models\//, "");
 
-    const systemInstruction = `
-Eres director creativo y guionista de videos verticales 9:16 (TikTok/Reels/Shorts) especializados en fútbol y análisis deportivo.
-Devuelve EXCLUSIVAMENTE un objeto JSON válido que siga exactamente esta estructura:
+    const systemInstruction = `Devuelve SOLO JSON válido para un video vertical 9:16 de fútbol en español con este formato exacto:
 {
-  "title": "Título corto del proyecto",
-  "theme": {
-    "primaryColor": "#004D98",
-    "secondaryColor": "#A50044",
-    "accentColor": "#EDBB00",
-    "bgColor": "#07111F"
-  },
+  "title": "Título corto",
+  "theme": { "primaryColor": "#004D98", "secondaryColor": "#A50044", "accentColor": "#EDBB00", "bgColor": "#07111F" },
   "scenes": [
     {
       "id": "s1",
       "type": "hook" | "tactics" | "versus" | "headline" | "cta",
       "durationSeconds": 6,
-      "badge": "ETIQUETA CORTA",
-      "title": "TITULAR BREVE",
-      "subtitle": "Texto narrado o subtítulo conciso en pantalla (máximo 15 palabras).",
-      "highlightValue": "60M €",
+      "badge": "ETIQUETA",
+      "title": "TITULAR",
+      "subtitle": "Subtítulo breve de máximo 14 palabras.",
+      "highlightValue": "80%",
       "stampText": "CLAVE",
-      "jerseyNumber": "19",
-      "leftLabel": "Equipo o Jugador A",
-      "leftValue": 68,
-      "rightLabel": "Equipo o Jugador B",
-      "rightValue": 32,
-      "bullets": ["Punto clave 1", "Punto clave 2"],
-      "tacticCaption": "Explicación corta del movimiento en pizarra."
+      "jerseyNumber": "10",
+      "leftLabel": "Opción A",
+      "leftValue": 70,
+      "rightLabel": "Opción B",
+      "rightValue": 30,
+      "bullets": ["Punto 1", "Punto 2"],
+      "tacticCaption": "Movimiento táctico breve."
     }
   ]
 }
-Reglas:
-1. Genera entre 4 y 6 escenas cuya suma de durationSeconds se aproxime a ${durationSeconds} segundos.
-2. Empieza siempre con una escena "hook", incluye al menos una "tactics" o "versus" en el desarrollo, y termina con una escena "cta".
-3. Usa textos directos, en español, sin relleno y pensados para lectura rápida en móvil.
-4. En cada escena incluye solo los campos útiles para su tipo, pero siempre incluye id, type, durationSeconds, badge, title y subtitle.
-`;
+Usa entre 4 y 5 escenas que sumen cerca de ${durationSeconds} segundos. Empieza con "hook" y termina con "cta".`;
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const payload = {
@@ -97,32 +122,43 @@ Reglas:
       generationConfig: {
         responseMimeType: "application/json",
         temperature: 0.7,
+        maxOutputTokens: 1200,
       },
     };
 
-    const { response, data } = await callGeminiWithRetry(url, payload);
+    const result = await callGeminiWithinBudget(url, payload);
 
-    if (!response.ok) {
+    if (!result.ok) {
+      const apiMsg =
+        typeof result.data?.error === "string"
+          ? result.data.error
+          : result.data?.error?.message;
       return new Response(
         JSON.stringify({
           error:
-            response.status === 503
-              ? "El modelo de Gemini está saturado en este momento. Intenta de nuevo en unos segundos."
-              : data.error?.message || "Error al consultar la API de Gemini.",
+            result.status === 503
+              ? `El modelo ${model} está saturado (503). Intenta de nuevo en unos segundos.`
+              : apiMsg || `Error ${result.status} al consultar Gemini (${model}).`,
         }),
-        { status: response.status, headers: { "Content-Type": "application/json" } }
+        { status: result.status, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const rawText = result.data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!rawText) {
       return new Response(
-        JSON.stringify({ error: "Gemini no devolvió contenido." }),
+        JSON.stringify({ error: "Gemini respondió vacío sin texto." }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    const videoSpec = JSON.parse(rawText);
+    const cleaned = rawText
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/```\s*$/, "")
+      .trim();
+
+    const videoSpec = JSON.parse(cleaned);
     return new Response(JSON.stringify(videoSpec), {
       status: 200,
       headers: { "Content-Type": "application/json" },

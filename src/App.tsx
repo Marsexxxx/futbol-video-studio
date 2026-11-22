@@ -16,6 +16,12 @@ import { SceneType, VideoScene, VideoSpec } from "./types";
 
 const FPS = 30;
 
+type GenerateResponse = Partial<VideoSpec> & {
+  error?: string;
+  errorMessage?: string;
+  message?: string;
+};
+
 export function App() {
   const [spec, setSpec] = useState<VideoSpec>(DEFAULT_VIDEO_SPEC);
   const [prompt, setPrompt] = useState("");
@@ -49,15 +55,28 @@ export function App() {
         body: JSON.stringify({ prompt, durationSeconds: targetDuration }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "No se pudo generar el video.");
+      const raw = await res.text();
+      let data: GenerateResponse = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error(`Error del servidor (${res.status}): ${raw.slice(0, 140)}`);
       }
+
+      if (!res.ok) {
+        throw new Error(
+          data.error ||
+            data.errorMessage ||
+            data.message ||
+            `Error ${res.status} al generar el video.`
+        );
+      }
+
       if (!Array.isArray(data.scenes) || data.scenes.length === 0) {
         throw new Error("La respuesta no incluyó escenas válidas.");
       }
 
-      setSpec(data);
+      setSpec(data as VideoSpec);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error de conexión con Gemini.");
     } finally {
