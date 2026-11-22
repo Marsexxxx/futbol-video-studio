@@ -18,6 +18,7 @@ export interface VideoScene {
   tacticCaption?: string;
   imageUrl?: string;
   audioUrl?: string;
+  rawAudioDuration?: number;
 }
 
 export interface VideoTheme {
@@ -31,4 +32,5 @@ export interface VideoSpec {
   title: string;
   theme: VideoTheme;
   scenes: VideoScene[];
+  voiceSpeed?: number;
 }

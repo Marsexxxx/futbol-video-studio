@@ -25,7 +25,7 @@ function generateSecMsGec() {
     .toUpperCase();
 }
 
-function synthesizeEdgeTts(text, voice, rate, timeoutMs = 4500) {
+function synthesizeEdgeTts(text, voice, timeoutMs = 7000) {
   return new Promise((resolve, reject) => {
     const connectionId = crypto.randomUUID().replace(/-/g, "");
     const requestId = crypto.randomUUID().replace(/-/g, "");
@@ -80,7 +80,7 @@ function synthesizeEdgeTts(text, voice, rate, timeoutMs = 4500) {
       const ssml =
         `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${lang}'>` +
         `<voice name='${voice}'>` +
-        `<prosody pitch='+0Hz' rate='${rate}' volume='+0%'>${escapeXml(text)}</prosody>` +
+        `<prosody pitch='+0Hz' rate='+0%' volume='+0%'>${escapeXml(text)}</prosody>` +
         `</voice></speak>`;
 
       const ssmlMsg =
@@ -172,11 +172,7 @@ export default async (req) => {
   }
 
   try {
-    const {
-      text,
-      voice = "es-MX-JorgeNeural",
-      rate = "+8%",
-    } = await req.json();
+    const { text, voice = "es-MX-JorgeNeural" } = await req.json();
 
     const cleanText = String(text || "").trim();
     if (!cleanText) {
@@ -190,7 +186,7 @@ export default async (req) => {
     let provider = "edge-tts";
 
     try {
-      audioBuffer = await synthesizeEdgeTts(cleanText, voice, rate);
+      audioBuffer = await synthesizeEdgeTts(cleanText, voice);
     } catch {
       const lang = voice.startsWith("es-ES") ? "es-ES" : "es-MX";
       audioBuffer = await synthesizeGoogleTranslateTts(cleanText, lang);

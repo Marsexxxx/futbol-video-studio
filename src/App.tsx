@@ -24,6 +24,14 @@ const VOICE_OPTIONS = [
   { id: "es-AR-TomasNeural", label: "Tomás · Argentina (Masculino)" },
 ];
 
+const SPEED_OPTIONS = [
+  { value: 1.0, label: "1.0x Normal" },
+  { value: 1.15, label: "1.15x Ágil" },
+  { value: 1.25, label: "1.25x Reels / TikTok" },
+  { value: 1.35, label: "1.35x Rápida" },
+  { value: 1.5, label: "1.5x Muy rápida" },
+];
+
 type GenerateResponse = Partial<VideoSpec> & {
   error?: string;
   errorMessage?: string;
@@ -36,6 +44,10 @@ type TtsResponse = {
   provider?: string;
   error?: string;
 };
+
+function calcDuration(rawAudioDuration: number, speed: number): number {
+  return Math.max(2, Math.ceil((rawAudioDuration / speed + 0.3) * 10) / 10);
+}
 
 function base64ToBlobUrl(base64: string, mimeType: string): string {
   const binary = atob(base64);
@@ -63,12 +75,17 @@ function measureAudioDuration(url: string): Promise<number> {
 async function fetchSceneVoice(
   text: string,
   voice: string,
-  rate: string
-): Promise<{ audioUrl: string; durationSeconds: number }> {
+  speed: number
+): Promise<{
+  audioUrl: string;
+  rawAudioDuration: number;
+  durationSeconds: number;
+  provider: string;
+}> {
   const res = await fetch("/.netlify/functions/generate-tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, voice, rate }),
+    body: JSON.stringify({ text, voice }),
   });
 
   const data: TtsResponse = await res.json();
@@ -77,24 +94,30 @@ async function fetchSceneVoice(
   }
 
   const audioUrl = base64ToBlobUrl(data.audioBase64, data.mimeType || "audio/mpeg");
-  const audioDuration = await measureAudioDuration(audioUrl);
-  const durationSeconds = Math.max(
-    2.5,
-    Math.ceil((audioDuration + 0.45) * 10) / 10
-  );
+  const rawAudioDuration = await measureAudioDuration(audioUrl);
+  const durationSeconds = calcDuration(rawAudioDuration, speed);
 
-  return { audioUrl, durationSeconds };
+  return {
+    audioUrl,
+    rawAudioDuration,
+    durationSeconds,
+    provider: data.provider || "edge-tts",
+  };
 }
 
 export function App() {
-  const [spec, setSpec] = useState<VideoSpec>(DEFAULT_VIDEO_SPEC);
+  const [spec, setSpec] = useState<VideoSpec>({
+    ...DEFAULT_VIDEO_SPEC,
+    voiceSpeed: 1.25,
+  });
   const [prompt, setPrompt] = useState("");
   const [targetDuration, setTargetDuration] = useState(35);
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [voice, setVoice] = useState("es-MX-JorgeNeural");
-  const [voiceRate, setVoiceRate] = useState("+8%");
+  const [voiceSpeed, setVoiceSpeed] = useState(1.25);
+  const [voiceProvider, setVoiceProvider] = useState<string | null>(null);
   const [autoVoice, setAutoVoice] = useState(true);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [sceneVoiceLoading, setSceneVoiceLoading] = useState<number | null>(null);
@@ -117,32 +140,60 @@ export function App() {
     [spec]
   );
 
+  const handleSpeedChange = (newSpeed: number) => {
+    setVoiceSpeed(newSpeed);
+    setSpec((prev) => ({
+      ...prev,
+      voiceSpeed: newSpeed,
+      scenes: prev.scenes.map((scene) =>
+        scene.rawAudioDuration
+          ? {
+              ...scene,
+              durationSeconds: calcDuration(scene.rawAudioDuration, newSpeed),
+            }
+          : scene
+      ),
+    }));
+  };
+
   const generateAllVoices = async (
     targetSpec: VideoSpec,
     selectedVoice = voice,
-    selectedRate = voiceRate
+    selectedSpeed = voiceSpeed
   ) => {
     setVoiceLoading(true);
     setVoiceError(null);
 
     try {
+      let lastProvider = "edge-tts";
       const updatedScenes = await Promise.all(
         targetSpec.scenes.map(async (scene) => {
           const textToSpeak = (scene.subtitle || scene.title || "").trim();
           if (!textToSpeak) return scene;
-          const result = await fetchSceneVoice(textToSpeak, selectedVoice, selectedRate);
+          const result = await fetchSceneVoice(
+            textToSpeak,
+            selectedVoice,
+            selectedSpeed
+          );
+          lastProvider = result.provider;
           if (scene.audioUrl && scene.audioUrl.startsWith("blob:")) {
             URL.revokeObjectURL(scene.audioUrl);
           }
           return {
             ...scene,
             audioUrl: result.audioUrl,
+            rawAudioDuration: result.rawAudioDuration,
             durationSeconds: result.durationSeconds,
           };
         })
       );
 
-      setSpec({ ...targetSpec, scenes: updatedScenes });
+      setVoiceProvider(lastProvider);
+      setSpec({
+        ...targetSpec,
+        voiceSpeed: selectedSpeed,
+        scenes: updatedScenes,
+      });
     } catch (err) {
       setVoiceError(
         err instanceof Error ? err.message : "Error al generar las voces con IA."
@@ -161,12 +212,14 @@ export function App() {
     setVoiceError(null);
 
     try {
-      const result = await fetchSceneVoice(textToSpeak, voice, voiceRate);
+      const result = await fetchSceneVoice(textToSpeak, voice, voiceSpeed);
+      setVoiceProvider(result.provider);
       if (scene.audioUrl && scene.audioUrl.startsWith("blob:")) {
         URL.revokeObjectURL(scene.audioUrl);
       }
       updateScene(index, {
         audioUrl: result.audioUrl,
+        rawAudioDuration: result.rawAudioDuration,
         durationSeconds: result.durationSeconds,
       });
     } catch (err) {
@@ -215,12 +268,15 @@ export function App() {
         throw new Error("La respuesta no incluyó escenas válidas.");
       }
 
-      const generatedSpec = data as VideoSpec;
+      const generatedSpec: VideoSpec = {
+        ...(data as VideoSpec),
+        voiceSpeed,
+      };
       setSpec(generatedSpec);
 
       if (autoVoice && !audioUrl) {
         setLoadingStep("Generando voz sincronizada...");
-        await generateAllVoices(generatedSpec);
+        await generateAllVoices(generatedSpec, voice, voiceSpeed);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error de conexión con Gemini.");
@@ -282,7 +338,9 @@ export function App() {
   const downloadJson = () => {
     const cleanSpec: VideoSpec = {
       ...spec,
-      scenes: spec.scenes.map(({ audioUrl: _a, ...rest }) => rest),
+      scenes: spec.scenes.map(
+        ({ audioUrl: _a, rawAudioDuration: _r, ...rest }) => rest
+      ),
     };
     const blob = new Blob([JSON.stringify(cleanSpec, null, 2)], {
       type: "application/json",
@@ -360,7 +418,8 @@ export function App() {
               </div>
               {!audioUrl && syncedScenesCount > 0 && (
                 <span className="status-badge">
-                  Voz IA lista ({syncedScenesCount}/{spec.scenes.length})
+                  {voiceProvider === "google-tts" ? "Respaldo" : "Edge Neural"} ·{" "}
+                  {voiceSpeed}x ({syncedScenesCount}/{spec.scenes.length})
                 </span>
               )}
               {audioUrl && <span className="status-badge">Usando tu audio</span>}
@@ -375,17 +434,22 @@ export function App() {
                 ))}
               </select>
 
-              <select value={voiceRate} onChange={(e) => setVoiceRate(e.target.value)}>
-                <option value="+0%">Velocidad normal</option>
-                <option value="+8%">Dinámica (+8%)</option>
-                <option value="+15%">Rápida (+15%)</option>
+              <select
+                value={voiceSpeed}
+                onChange={(e) => handleSpeedChange(Number(e.target.value))}
+              >
+                {SPEED_OPTIONS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
               </select>
 
               <button
                 type="button"
                 className="btn-primary"
                 disabled={voiceLoading || loading}
-                onClick={() => generateAllVoices(spec)}
+                onClick={() => generateAllVoices(spec, voice, voiceSpeed)}
               >
                 <Volume2 size={15} />
                 {voiceLoading ? "Generando voz..." : "Generar voz IA"}
