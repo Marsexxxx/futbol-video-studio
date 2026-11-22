@@ -16,7 +16,7 @@ export default async (req) => {
 
   try {
     const { prompt, durationSeconds = 35 } = await req.json();
-    const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
 
     const systemInstruction = `
 Eres director creativo y guionista de videos verticales 9:16 (TikTok/Reels/Shorts) especializados en fútbol y análisis deportivo.
