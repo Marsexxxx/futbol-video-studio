@@ -1,3 +1,37 @@
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function callGeminiWithRetry(url, payload, maxAttempts = 3) {
+  let response;
+  let data = {};
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    try {
+      data = await response.json();
+    } catch {
+      data = {};
+    }
+
+    if (response.ok) {
+      return { response, data };
+    }
+
+    const isTemporary = response.status === 503 || response.status === 429;
+    if (!isTemporary || attempt === maxAttempts) {
+      return { response, data };
+    }
+
+    await sleep(attempt * 1200);
+  }
+
+  return { response, data };
+}
+
 export default async (req) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
@@ -56,27 +90,25 @@ Reglas:
 4. En cada escena incluye solo los campos útiles para su tipo, pero siempre incluye id, type, durationSeconds, badge, title y subtitle.
 `;
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemInstruction }] },
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.7,
-          },
-        }),
-      }
-    );
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const payload = {
+      system_instruction: { parts: [{ text: systemInstruction }] },
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.7,
+      },
+    };
 
-    const data = await response.json();
+    const { response, data } = await callGeminiWithRetry(url, payload);
+
     if (!response.ok) {
       return new Response(
         JSON.stringify({
-          error: data.error?.message || "Error al consultar la API de Gemini.",
+          error:
+            response.status === 503
+              ? "El modelo de Gemini está saturado en este momento. Intenta de nuevo en unos segundos."
+              : data.error?.message || "Error al consultar la API de Gemini.",
         }),
         { status: response.status, headers: { "Content-Type": "application/json" } }
       );
