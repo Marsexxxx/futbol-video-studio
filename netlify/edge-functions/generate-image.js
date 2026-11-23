@@ -26,7 +26,7 @@ async function discoverImageModels(apiKey) {
   const discovered = [];
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+      `[https://generativelanguage.googleapis.com/v1beta/models?key=$](https://generativelanguage.googleapis.com/v1beta/models?key=$){apiKey}`
     );
     if (res.ok) {
       const data = await res.json();
@@ -99,7 +99,7 @@ async function discoverImageModels(apiKey) {
 }
 
 async function callGeminiImage(model, apiKey, promptText, timeoutMs) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const url = `[https://generativelanguage.googleapis.com/v1beta/models/$](https://generativelanguage.googleapis.com/v1beta/models/$){model}:generateContent?key=${apiKey}`;
 
   const tryOnce = async (payload) => {
     const controller = new AbortController();
@@ -155,7 +155,10 @@ async function callGeminiImage(model, apiKey, promptText, timeoutMs) {
   const parts = res.data?.candidates?.[0]?.content?.parts || [];
   const imgPart = parts.find((p) => {
     const inline = p.inlineData || p.inline_data;
-    return inline?.data && String(inline.mimeType || inline.mime_type || "").startsWith("image/");
+    return (
+      inline?.data &&
+      String(inline.mimeType || inline.mime_type || "").startsWith("image/")
+    );
   });
   const inline = imgPart?.inlineData || imgPart?.inline_data;
 
@@ -179,7 +182,7 @@ async function callGeminiImage(model, apiKey, promptText, timeoutMs) {
 async function callImagen(model, apiKey, promptText, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`;
+  const url = `[https://generativelanguage.googleapis.com/v1beta/models/$](https://generativelanguage.googleapis.com/v1beta/models/$){model}:predict?key=${apiKey}`;
 
   try {
     const res = await fetch(url, {
@@ -241,11 +244,13 @@ async function callImagen(model, apiKey, promptText, timeoutMs) {
 
 const VISUAL_STYLES = {
   photoreal:
-    "Ultra-realistic cinematic sports photography, shot on 85mm lens, shallow depth of field, dramatic stadium floodlights, realistic skin texture, natural motion blur, ESPN/Netflix documentary aesthetic, edge-to-edge full-bleed vertical 9:16 frame, strictly NO text, NO letters, NO numbers overlay, NO watermarks, NO borders, NO frames.",
+    "Ultra-realistic cinematic photography, shot on 85mm lens, shallow depth of field, dramatic lighting, rich realistic textures, Netflix documentary aesthetic, edge-to-edge full-bleed vertical 9:16 frame, strictly NO text, NO letters, NO numbers overlay, NO watermarks, NO borders, NO frames.",
   hyperart:
-    "Hyper-realistic dramatic digital sports artwork, cinematic lighting, rich contrast, lifelike facial features and expressions, volumetric stadium atmosphere, high-budget sports poster style, edge-to-edge full-bleed vertical 9:16 frame, strictly NO text, NO letters, NO watermarks, NO borders, NO frames.",
+    "Hyper-realistic dramatic digital concept artwork, cinematic lighting, rich contrast, expressive lifelike details, volumetric atmosphere, high-budget movie poster style, edge-to-edge full-bleed vertical 9:16 frame, strictly NO text, NO letters, NO watermarks, NO borders, NO frames.",
   editorial3d:
-    "High-end stylized 3D cinematic sports illustration, Unreal Engine 5 lighting, expressive lifelike likeness, dramatic shadows, glossy sports broadcast aesthetic, edge-to-edge full-bleed vertical 9:16 frame, strictly NO text, NO letters, NO watermarks, NO borders, NO frames.",
+    "High-end stylized 3D cinematic render, Unreal Engine 5 lighting, expressive lifelike details, dramatic shadows, premium animated film aesthetic, edge-to-edge full-bleed vertical 9:16 frame, strictly NO text, NO letters, NO watermarks, NO borders, NO frames.",
+  anime:
+    "High-budget modern cinematic anime illustration, dramatic lighting, crisp linework, atmospheric depth, vibrant film color grading, edge-to-edge full-bleed vertical 9:16 frame, strictly NO text, NO letters, NO watermarks, NO borders, NO frames.",
 };
 
 export default async (req) => {
@@ -281,7 +286,7 @@ export default async (req) => {
 
     const styleSuffix = VISUAL_STYLES[visualStyle] || VISUAL_STYLES.photoreal;
     const primaryPrompt = `${basePrompt}. ${styleSuffix}`;
-    const safeRetryPrompt = `${String(fallbackPrompt || basePrompt).trim()}. Dramatic cinematic sports digital painting, atmospheric stadium lighting, realistic editorial style, full-bleed vertical 9:16 frame, strictly NO text, NO borders, NO frames.`;
+    const safeRetryPrompt = `${String(fallbackPrompt || basePrompt).trim()}. Dramatic cinematic editorial artwork, atmospheric lighting, rich detail, full-bleed vertical 9:16 frame, strictly NO text, NO borders, NO frames.`;
 
     const candidates = await discoverImageModels(apiKey);
     const startTime = Date.now();
@@ -302,7 +307,10 @@ export default async (req) => {
         Math.min(remainingMs, 22000)
       );
 
-      if (!result.ok && (result.blocked || result.status === 422 || result.status === 400)) {
+      if (
+        !result.ok &&
+        (result.blocked || result.status === 422 || result.status === 400)
+      ) {
         const retryMs = maxBudgetMs - (Date.now() - startTime);
         if (retryMs >= 5000) {
           result = await callFn(

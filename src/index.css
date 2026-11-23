@@ -452,3 +452,27 @@ select:focus {
   font-size: 12px !important;
   color: #93c5fd !important;
 }
+
+.duration-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preset-chip {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.6);
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.preset-chip.active,
+.preset-chip:hover {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.18);
+  color: #ffffff;
+}

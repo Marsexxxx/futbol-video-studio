@@ -93,7 +93,7 @@ function wrapPcmAsWav(pcmBytes, sampleRate = 24000, channels = 1, bitsPerSample 
 async function callGeminiTts(model, apiKey, payload, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const url = `[https://generativelanguage.googleapis.com/v1beta/models/$](https://generativelanguage.googleapis.com/v1beta/models/$){model}:generateContent?key=${apiKey}`;
 
   try {
     const response = await fetch(url, {
@@ -128,11 +128,15 @@ async function callGeminiTts(model, apiKey, payload, timeoutMs) {
 
 const STYLE_PROMPTS = {
   tiktok:
-    "Energetic, natural Spanish sports content creator for TikTok and Reels. Brisk conversational pace, confident tone, expressive emphasis on key football words, smooth finish at the end of the sentence, never robotic.",
+    "Energetic, natural Spanish short-form content creator for TikTok and Reels. Brisk conversational pace, confident tone, expressive emphasis on key words, smooth finish at the end of the sentence, never robotic.",
+  documentary:
+    "Clear, engaging Spanish documentary narrator and analyst. Warm human voice, crisp pronunciation, cinematic storytelling cadence, slight natural pause on commas and full stop.",
   analyst:
-    "Clear, confident Spanish football tactical analyst. Natural documentary cadence, warm human voice, crisp pronunciation, slight natural pause on commas and full stop.",
+    "Clear, confident Spanish analyst and narrator. Natural documentary cadence, warm human voice, crisp pronunciation, clean ending.",
   hype:
-    "Excited, passionate Spanish football commentator. Dynamic momentum, engaging storytelling energy, natural intonation and clean ending.",
+    "Excited, passionate Spanish presenter and narrator. Dynamic momentum, high-energy storytelling, expressive intonation and clean ending.",
+  mystery:
+    "Intriguing, suspenseful Spanish storyteller. Atmospheric, controlled cadence that builds curiosity and tension, clear natural finish.",
 };
 
 export default async (req) => {

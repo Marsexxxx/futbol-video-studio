@@ -22,6 +22,7 @@ import {
   SceneLayout,
   SceneType,
   SubtitleStyle,
+  TopicMode,
   VideoScene,
   VideoSpec,
   VisualStyle,
@@ -32,12 +33,24 @@ const RemotionPlayer = Player as React.ComponentType<any>;
 
 const FPS = 30;
 const LEAD_IN_SEC = SCENE_LEAD_IN_FRAMES / FPS;
-const TAIL_PAUSE_SEC = 0.75;
+const DEFAULT_TAIL_PAUSE_SEC = 0.75;
+const MIN_TAIL_PAUSE_SEC = 0.4;
+
+const DURATION_PRESETS = [15, 30, 45, 60, 90];
+
+const TOPIC_OPTIONS: { id: TopicMode; label: string }[] = [
+  { id: "auto", label: "Temática: Automática (Cualquier tema)" },
+  { id: "story", label: "Temática: Historia / Misterio / Documental" },
+  { id: "tech", label: "Temática: Tecnología / Negocios / Finanzas" },
+  { id: "viral", label: "Temática: Ciencia / Curiosidades / Datos" },
+  { id: "cinema", label: "Temática: Cine / Cultura / Entretenimiento" },
+  { id: "sports", label: "Temática: Deportes / Fútbol" },
+];
 
 const VOICE_OPTIONS = [
-  { id: "Fenrir", label: "Fenrir · Energético (Deportes)" },
+  { id: "Fenrir", label: "Fenrir · Energético y potente" },
   { id: "Puck", label: "Puck · Dinámico y juvenil" },
-  { id: "Charon", label: "Charon · Grave y analítico" },
+  { id: "Charon", label: "Charon · Grave y documental" },
   { id: "Orus", label: "Orus · Firme y directo" },
   { id: "Kore", label: "Kore · Femenina clara" },
   { id: "Zephyr", label: "Zephyr · Femenina energética" },
@@ -52,14 +65,16 @@ const ACCENT_OPTIONS = [
 
 const STYLE_OPTIONS = [
   { id: "tiktok", label: "Estilo Reels / TikTok" },
-  { id: "analyst", label: "Estilo Analista táctico" },
-  { id: "hype", label: "Estilo Narrador intenso" },
+  { id: "documentary", label: "Estilo Documental / Analista" },
+  { id: "hype", label: "Estilo Intenso / Épico" },
+  { id: "mystery", label: "Estilo Misterio / Suspenso" },
 ];
 
 const VISUAL_STYLE_OPTIONS: { id: VisualStyle; label: string }[] = [
   { id: "photoreal", label: "Visual: Fotorrealista cinematográfico" },
-  { id: "hyperart", label: "Visual: Arte deportivo hiperrealista" },
+  { id: "hyperart", label: "Visual: Arte conceptual hiperrealista" },
   { id: "editorial3d", label: "Visual: 3D Cinematográfico" },
+  { id: "anime", label: "Visual: Anime cinematográfico" },
 ];
 
 const SPEED_OPTIONS = [
@@ -99,9 +114,137 @@ type ExportState = {
   error?: string;
 };
 
-function calcSceneDuration(rawAudioDuration: number, speed: number): number {
-  const total = LEAD_IN_SEC + rawAudioDuration / speed + TAIL_PAUSE_SEC;
-  return Number(Math.max(2.5, Math.ceil(total * 20) / 20).toFixed(2));
+function clampDuration(sec: number): number {
+  return Math.min(180, Math.max(10, Math.round(sec)));
+}
+
+function extractRequestedDuration(
+  promptText: string,
+  fallbackSeconds: number
+): { seconds: number; fromPrompt: boolean } {
+  const text = String(promptText || "").toLowerCase();
+
+  if (/(?:\b1\b|\bun\b)\s*(?:minuto|min)\s*y\s*medio/.test(text)) {
+    return { seconds: 90, fromPrompt: true };
+  }
+
+  const minSecMatch = text.match(
+    /(?:\b(\d+(?:[.,]\d+)?)|\bun\b)\s*(?:minutos?|mins?)\s*(?:y|con)?\s*(\d+)\s*(?:segundos?|segs?\.?)/
+  );
+  if (minSecMatch) {
+    const mins = minSecMatch[1]
+      ? parseFloat(minSecMatch[1].replace(",", "."))
+      : 1;
+    const secs = parseInt(minSecMatch[2], 10);
+    return { seconds: clampDuration(Math.round(mins * 60 + secs)), fromPrompt: true };
+  }
+
+  const clockMatch = text.match(
+    /(?:dure|duraci[oó]n|de|video\s+de)\s*(\d):([0-5]\d)\b/
+  );
+  if (clockMatch) {
+    return {
+      seconds: clampDuration(
+        parseInt(clockMatch[1], 10) * 60 + parseInt(clockMatch[2], 10)
+      ),
+      fromPrompt: true,
+    };
+  }
+
+  const minOnlyMatch = text.match(
+    /(?:\b(\d+(?:[.,]\d+)?)|\bun\b)\s*(?:minutos?|mins?)\b/
+  );
+  if (minOnlyMatch) {
+    const mins = minOnlyMatch[1]
+      ? parseFloat(minOnlyMatch[1].replace(",", "."))
+      : 1;
+    return { seconds: clampDuration(Math.round(mins * 60)), fromPrompt: true };
+  }
+
+  const secWordMatch = text.match(/\b(\d{1,3})\s*(?:segundos?|segs?\.?)\b/);
+  if (secWordMatch) {
+    const secs = parseInt(secWordMatch[1], 10);
+    if (secs >= 8 && secs <= 300) {
+      return { seconds: clampDuration(secs), fromPrompt: true };
+    }
+  }
+
+  const shortSecMatch = text.match(
+    /(?:de|dure|duraci[oó]n|en|unos|aprox\.?)\s+(\d{1,3})\s*s\b/
+  );
+  if (shortSecMatch) {
+    const secs = parseInt(shortSecMatch[1], 10);
+    if (secs >= 8 && secs <= 300) {
+      return { seconds: clampDuration(secs), fromPrompt: true };
+    }
+  }
+
+  return { seconds: clampDuration(fallbackSeconds || 35), fromPrompt: false };
+}
+
+function calcSceneDuration(
+  rawAudioDuration: number,
+  speed: number,
+  tailPause = DEFAULT_TAIL_PAUSE_SEC
+): number {
+  const total = LEAD_IN_SEC + rawAudioDuration / speed + tailPause;
+  return Number(Math.max(2.2, Math.ceil(total * 20) / 20).toFixed(2));
+}
+
+function fitScenesToTargetDuration(
+  scenes: VideoScene[],
+  speed: number,
+  targetDuration?: number
+): VideoScene[] {
+  if (!targetDuration || scenes.length === 0) return scenes;
+  const voicedCount = scenes.filter((s) => Boolean(s.rawAudioDuration)).length;
+  if (voicedCount === 0) return scenes;
+
+  const baseDurations = scenes.map((s) =>
+    s.rawAudioDuration
+      ? calcSceneDuration(s.rawAudioDuration, speed, DEFAULT_TAIL_PAUSE_SEC)
+      : s.durationSeconds || 5
+  );
+  const minDurations = scenes.map((s) =>
+    s.rawAudioDuration
+      ? calcSceneDuration(s.rawAudioDuration, speed, MIN_TAIL_PAUSE_SEC)
+      : Math.max(2, s.durationSeconds || 5)
+  );
+
+  const baseTotal = baseDurations.reduce((a, b) => a + b, 0);
+  const minTotal = minDurations.reduce((a, b) => a + b, 0);
+
+  if (baseTotal < targetDuration) {
+    const extraNeeded = targetDuration - baseTotal;
+    const perSceneExtra = Math.min(2.2, extraNeeded / scenes.length);
+    return scenes.map((scene, idx) => ({
+      ...scene,
+      durationSeconds: Number((baseDurations[idx] + perSceneExtra).toFixed(2)),
+    }));
+  }
+
+  if (baseTotal > targetDuration && minTotal <= targetDuration) {
+    const ratio =
+      baseTotal === minTotal
+        ? 0
+        : (targetDuration - minTotal) / (baseTotal - minTotal);
+    return scenes.map((scene, idx) => ({
+      ...scene,
+      durationSeconds: Number(
+        (
+          minDurations[idx] +
+          (baseDurations[idx] - minDurations[idx]) * ratio
+        ).toFixed(2)
+      ),
+    }));
+  }
+
+  return scenes.map((scene, idx) => ({
+    ...scene,
+    durationSeconds: Number(
+      (minTotal > targetDuration ? minDurations[idx] : baseDurations[idx]).toFixed(2)
+    ),
+  }));
 }
 
 function base64ToBytes(base64: string): Uint8Array {
@@ -305,7 +448,7 @@ async function fetchSceneImage(
 ): Promise<{ imageUrl: string; provider: string }> {
   const promptText = (
     scene.imagePrompt ||
-    `Cinematic vertical sports scene representing: ${scene.title}. ${scene.subtitle}`
+    `Cinematic vertical 9:16 scene representing: ${scene.title}. ${scene.subtitle}`
   ).trim();
 
   const res = await fetch("/api/generate-image", {
@@ -346,9 +489,11 @@ export function App() {
     ...DEFAULT_VIDEO_SPEC,
     voiceSpeed: 1.0,
     subtitleStyle: "dynamic",
+    targetDuration: 35,
   });
   const [prompt, setPrompt] = useState("");
-  const [targetDuration, setTargetDuration] = useState(35);
+  const [targetDurationInput, setTargetDurationInput] = useState("35");
+  const [topicMode, setTopicMode] = useState<TopicMode>("auto");
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -384,6 +529,11 @@ export function App() {
     };
   }, []);
 
+  const parsedTargetDuration = useMemo(() => {
+    const n = Number(targetDurationInput);
+    return Number.isFinite(n) && n > 0 ? clampDuration(n) : 35;
+  }, [targetDurationInput]);
+
   const totalFrames = useMemo(() => {
     const frames = spec.scenes.reduce(
       (acc, scene) =>
@@ -407,12 +557,12 @@ export function App() {
 
   const videoSlug = useMemo(
     () =>
-      (spec.title || "video-barca")
+      (spec.title || "video-ai")
         .toLowerCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "") || "video-barca",
+        .replace(/^-|-$/g, "") || "video-ai",
     [spec.title]
   );
 
@@ -421,13 +571,10 @@ export function App() {
     setSpec((prev) => ({
       ...prev,
       voiceSpeed: newSpeed,
-      scenes: prev.scenes.map((scene) =>
-        scene.rawAudioDuration
-          ? {
-              ...scene,
-              durationSeconds: calcSceneDuration(scene.rawAudioDuration, newSpeed),
-            }
-          : scene
+      scenes: fitScenesToTargetDuration(
+        prev.scenes,
+        newSpeed,
+        prev.targetDuration
       ),
     }));
   };
@@ -493,6 +640,16 @@ export function App() {
         setSpec(latestSpec);
       }
 
+      const fittedScenes = fitScenesToTargetDuration(
+        updatedScenes,
+        selectedSpeed,
+        targetSpec.targetDuration
+      );
+      latestSpec = {
+        ...latestSpec,
+        scenes: fittedScenes,
+      };
+      setSpec(latestSpec);
       setVoiceProvider(lastProvider);
     } catch (err) {
       setVoiceError(
@@ -623,8 +780,12 @@ export function App() {
     e.preventDefault();
     if (!prompt.trim()) return;
 
+    const detected = extractRequestedDuration(prompt, parsedTargetDuration);
+    const requestedSeconds = detected.seconds;
+    setTargetDurationInput(String(requestedSeconds));
+
     setLoading(true);
-    setLoadingStep("Creando guion y dirección visual...");
+    setLoadingStep(`Creando guion de ${requestedSeconds}s con Gemini...`);
     setError(null);
     setVoiceError(null);
     setImageError(null);
@@ -633,7 +794,12 @@ export function App() {
       const res = await fetch("/api/generate-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, durationSeconds: targetDuration }),
+        body: JSON.stringify({
+          prompt,
+          durationSeconds: requestedSeconds,
+          voiceSpeed,
+          topicMode,
+        }),
       });
 
       const raw = await res.text();
@@ -661,11 +827,12 @@ export function App() {
         ...(data as VideoSpec),
         voiceSpeed,
         subtitleStyle,
+        targetDuration: data.targetDuration || requestedSeconds,
       };
       setSpec(currentSpec);
 
       if (autoImages) {
-        setLoadingStep("Generando imágenes realistas 9:16...");
+        setLoadingStep("Generando imágenes 9:16...");
         currentSpec = await generateAllImages(currentSpec, visualStyle);
       }
 
@@ -863,7 +1030,7 @@ export function App() {
       title: "TITULAR",
       subtitle: "Texto narrado para esta escena.",
       imagePrompt:
-        "Dramatic vertical football stadium atmosphere at night under floodlights, realistic sports photography",
+        "Dramatic vertical 9:16 cinematic scene with atmospheric lighting, realistic photography",
     };
     setSpec((prev) => ({ ...prev, scenes: [...prev.scenes, newScene] }));
   };
@@ -906,7 +1073,7 @@ export function App() {
       <header className="studio-header">
         <div className="brand">
           {h(Film, { size: 20 })}
-          <span>Barça Video Studio AI</span>
+          <span>Video Studio AI</span>
         </div>
         <div className="header-actions">
           <span className="pill">{totalSeconds}s · 9:16</span>
@@ -999,25 +1166,55 @@ export function App() {
           <form className="card" onSubmit={handleGenerate}>
             <div className="card-title">
               {h(Sparkles, { size: 16 })}
-              <span>Generar video completo con Gemini</span>
+              <span>Crear video sobre cualquier tema</span>
             </div>
             <textarea
               rows={3}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Ej: Duelo épico entre Lamine Yamal y Kylian Mbappé en El Clásico, con escenas realistas en el estadio, tensión en el túnel y cierre preguntando quién es el nuevo rey..."
+              placeholder="Ej: Un video de 60 segundos explicando el misterio del Triángulo de las Bermudas, un análisis de IA y negocios, una historia épica de fútbol o curiosidades del espacio..."
             />
+
+            <select
+              value={topicMode}
+              onChange={(e) => setTopicMode(e.target.value as TopicMode)}
+            >
+              {TOPIC_OPTIONS.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+
+            <div className="duration-presets">
+              {DURATION_PRESETS.map((sec) => (
+                <button
+                  key={sec}
+                  type="button"
+                  className={`preset-chip ${parsedTargetDuration === sec ? "active" : ""}`}
+                  onClick={() => setTargetDurationInput(String(sec))}
+                >
+                  {sec}s
+                </button>
+              ))}
+            </div>
+
             <div className="form-row">
               <label className="duration-field">
-                <span>Duración objetivo</span>
+                <span>Duración</span>
                 <input
-                  type="number"
-                  min={15}
-                  max={90}
-                  value={targetDuration}
-                  onChange={(e) => setTargetDuration(Number(e.target.value))}
+                  type="text"
+                  inputMode="numeric"
+                  value={targetDurationInput}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/[^0-9]/g, "");
+                    setTargetDurationInput(digits);
+                  }}
+                  onBlur={() =>
+                    setTargetDurationInput(String(parsedTargetDuration))
+                  }
                 />
-                <span>seg</span>
+                <span>seg (10–180)</span>
               </label>
               <button type="submit" className="btn-primary" disabled={isBusy}>
                 {isBusy
@@ -1238,11 +1435,11 @@ export function App() {
                     >
                       <option value="hero-impact">Impacto / Portada</option>
                       <option value="story-clean">Cinematográfica limpia</option>
-                      <option value="split-versus">Duelo / Cara a cara</option>
+                      <option value="split-versus">Duelo / Comparativa</option>
                       <option value="stat-overlay">Dato gigante</option>
-                      <option value="quote-press">Titular / Polémica</option>
+                      <option value="quote-press">Titular / Cita</option>
                       <option value="cta-engage">Cierre / Pregunta</option>
-                      <option value="tactics">Pizarra táctica</option>
+                      <option value="tactics">Pizarra táctica (Deportes)</option>
                     </select>
 
                     <select
@@ -1264,22 +1461,25 @@ export function App() {
                     <input
                       type="number"
                       className="sec-input"
-                      min={2}
-                      max={30}
-                      step={0.1}
+                      min={1}
+                      max={45}
+                      step={0.5}
                       value={scene.durationSeconds}
-                      onChange={(e) =>
-                        updateScene(index, {
-                          durationSeconds: Math.max(2, Number(e.target.value)),
-                        })
-                      }
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        if (!Number.isNaN(val)) {
+                          updateScene(index, {
+                            durationSeconds: Math.min(45, Math.max(1, val)),
+                          });
+                        }
+                      }}
                     />
                     <span className="unit">s</span>
 
                     <button
                       type="button"
                       className={`icon-btn ${scene.imageUrl ? "active-voice" : ""}`}
-                      title="Generar o regenerar imagen realista IA de esta escena"
+                      title="Generar o regenerar imagen IA de esta escena"
                       disabled={sceneImageLoading === index || imagesLoading}
                       onClick={() => regenerateSingleSceneImage(index)}
                     >

@@ -958,7 +958,7 @@ const SceneCinematic: React.FC<SceneCommonProps> = ({
               boxShadow: "0 16px 36px rgba(0,0,0,0.55)",
             }}
           >
-            OPINA EN LOS COMENTARIOS ↓
+            {scene.ctaText || "¿TÚ QUÉ OPINAS? COMENTA ↓"}
           </div>
         </div>
       </>

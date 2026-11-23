@@ -23,7 +23,8 @@ export type CameraMotion =
   | "pan-right";
 
 export type SubtitleStyle = "dynamic" | "classic";
-export type VisualStyle = "photoreal" | "hyperart" | "editorial3d";
+export type VisualStyle = "photoreal" | "hyperart" | "editorial3d" | "anime";
+export type TopicMode = "auto" | "sports" | "story" | "tech" | "viral" | "cinema";
 
 export interface VideoScene {
   id: string;
@@ -37,6 +38,7 @@ export interface VideoScene {
   imagePrompt?: string;
   fallbackImagePrompt?: string;
   quoteText?: string;
+  ctaText?: string;
   highlightValue?: string;
   stampText?: string;
   jerseyNumber?: string;
@@ -67,5 +69,6 @@ export interface VideoSpec {
   scenes: VideoScene[];
   voiceSpeed?: number;
   subtitleStyle?: SubtitleStyle;
+  targetDuration?: number;
   globalAudioKey?: string;
 }

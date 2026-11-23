@@ -3,6 +3,106 @@ const getEnv = (key) =>
   (typeof Deno !== "undefined" && Deno.env?.get(key)) ||
   "";
 
+function clampDuration(sec) {
+  return Math.min(180, Math.max(10, Math.round(sec)));
+}
+
+function extractRequestedDuration(promptText, fallbackSeconds = 35) {
+  const text = String(promptText || "").toLowerCase();
+
+  if (/(?:\b1\b|\bun\b)\s*(?:minuto|min)\s*y\s*medio/.test(text)) {
+    return 90;
+  }
+
+  const minSecMatch = text.match(
+    /(?:\b(\d+(?:[.,]\d+)?)|\bun\b)\s*(?:minutos?|mins?)\s*(?:y|con)?\s*(\d+)\s*(?:segundos?|segs?\.?)/
+  );
+  if (minSecMatch) {
+    const mins = minSecMatch[1]
+      ? parseFloat(minSecMatch[1].replace(",", "."))
+      : 1;
+    const secs = parseInt(minSecMatch[2], 10);
+    return clampDuration(Math.round(mins * 60 + secs));
+  }
+
+  const clockMatch = text.match(
+    /(?:dure|duraci[oó]n|de|video\s+de)\s*(\d):([0-5]\d)\b/
+  );
+  if (clockMatch) {
+    return clampDuration(
+      parseInt(clockMatch[1], 10) * 60 + parseInt(clockMatch[2], 10)
+    );
+  }
+
+  const minOnlyMatch = text.match(
+    /(?:\b(\d+(?:[.,]\d+)?)|\bun\b)\s*(?:minutos?|mins?)\b/
+  );
+  if (minOnlyMatch) {
+    const mins = minOnlyMatch[1]
+      ? parseFloat(minOnlyMatch[1].replace(",", "."))
+      : 1;
+    return clampDuration(Math.round(mins * 60));
+  }
+
+  const secWordMatch = text.match(/\b(\d{1,3})\s*(?:segundos?|segs?\.?)\b/);
+  if (secWordMatch) {
+    const secs = parseInt(secWordMatch[1], 10);
+    if (secs >= 8 && secs <= 300) return clampDuration(secs);
+  }
+
+  const shortSecMatch = text.match(
+    /(?:de|dure|duraci[oó]n|en|unos|aprox\.?)\s+(\d{1,3})\s*s\b/
+  );
+  if (shortSecMatch) {
+    const secs = parseInt(shortSecMatch[1], 10);
+    if (secs >= 8 && secs <= 300) return clampDuration(secs);
+  }
+
+  return clampDuration(Number(fallbackSeconds) || 35);
+}
+
+function getTargetSceneCount(targetSeconds) {
+  if (targetSeconds <= 16) return 3;
+  if (targetSeconds <= 28) return 4;
+  if (targetSeconds <= 44) return 5;
+  if (targetSeconds <= 62) return 6;
+  if (targetSeconds <= 80) return 7;
+  if (targetSeconds <= 105) return 9;
+  return Math.min(12, Math.max(9, Math.round(targetSeconds / 11)));
+}
+
+function normalizeSceneDurations(scenes, targetSeconds) {
+  if (!Array.isArray(scenes) || scenes.length === 0) return scenes;
+
+  const weights = scenes.map((s) => {
+    const words = String(s.subtitle || s.title || "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean).length;
+    return Math.max(6, words);
+  });
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+
+  let assigned = scenes.map((s, idx) => {
+    const raw = (weights[idx] / totalWeight) * targetSeconds;
+    return {
+      ...s,
+      durationSeconds: Number(Math.max(2.5, Math.round(raw * 10) / 10).toFixed(1)),
+    };
+  });
+
+  const currentSum = assigned.reduce((acc, s) => acc + s.durationSeconds, 0);
+  const diff = Number((targetSeconds - currentSum).toFixed(1));
+  if (assigned.length > 0 && Math.abs(diff) >= 0.1) {
+    const lastIdx = assigned.length - 1;
+    assigned[lastIdx].durationSeconds = Number(
+      Math.max(2.5, assigned[lastIdx].durationSeconds + diff).toFixed(1)
+    );
+  }
+
+  return assigned;
+}
+
 async function requestModel(model, apiKey, payload, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -39,6 +139,15 @@ async function requestModel(model, apiKey, payload, timeoutMs) {
   }
 }
 
+const TOPIC_HINTS = {
+  auto: "Detecta automáticamente la temática exacta del prompt (historia, ciencia, tecnología, negocios, finanzas, misterio, cine, cocina, motivación, noticias, deportes o cualquier otro tema) y adapta colores, ritmo, estética visual y tono narrativo 100% a ese tema.",
+  sports: "Enfoque deportivo/futbolístico de alto impacto, con estética de transmisión deportiva y energía de grada.",
+  story: "Enfoque documental, histórico o de misterio con atmósfera envolvente, narrativa cinematográfica y tensión dramática.",
+  tech: "Enfoque de tecnología, inteligencia artificial, negocios o finanzas con estética moderna, limpia y ejecutiva.",
+  viral: "Enfoque de curiosidades, ciencia, psicología o datos sorprendentes con ganchos rápidos y visuales llamativos.",
+  cinema: "Enfoque de cine, cultura pop, videojuegos o entretenimiento con iluminación dramática de película.",
+};
+
 export default async (req) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
@@ -56,7 +165,23 @@ export default async (req) => {
   }
 
   try {
-    const { prompt, durationSeconds = 35 } = await req.json();
+    const {
+      prompt,
+      durationSeconds = 35,
+      voiceSpeed = 1.0,
+      topicMode = "auto",
+    } = await req.json();
+
+    const effectiveDuration = extractRequestedDuration(prompt, durationSeconds);
+    const sceneCount = getTargetSceneCount(effectiveDuration);
+    const speed = Math.min(1.5, Math.max(0.85, Number(voiceSpeed) || 1.0));
+    const speechBudgetSec = Math.max(6, effectiveDuration - sceneCount * 0.95);
+    const targetTotalWords = Math.max(18, Math.round(speechBudgetSec * 2.55 * speed));
+    const avgWordsPerScene = Math.max(6, Math.round(targetTotalWords / sceneCount));
+    const minWordsPerScene = Math.max(5, Math.round(avgWordsPerScene * 0.8));
+    const maxWordsPerScene = Math.max(minWordsPerScene + 3, Math.round(avgWordsPerScene * 1.2));
+    const avgSecPerScene = (effectiveDuration / sceneCount).toFixed(1);
+
     const primaryModel = (getEnv("GEMINI_MODEL") || "gemini-3.8-flash")
       .trim()
       .replace(/^models\//, "");
@@ -66,15 +191,18 @@ export default async (req) => {
       .filter(Boolean);
 
     const models = [...new Set([primaryModel, ...fallbackList])];
+    const topicHint = TOPIC_HINTS[topicMode] || TOPIC_HINTS.auto;
 
-    const systemInstruction = `Eres director creativo, guionista y director de fotografía de videos verticales 9:16 virales de fútbol en español (TikTok / Reels / YouTube Shorts).
+    const systemInstruction = `Eres director creativo, guionista y director de fotografía de videos verticales 9:16 virales en español sobre CUALQUIER temática (TikTok / Reels / YouTube Shorts).
+${topicHint}
+
 Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
 {
   "title": "Título corto del video",
   "theme": {
-    "primaryColor": "#004D98",
-    "secondaryColor": "#A50044",
-    "accentColor": "#EDBB00",
+    "primaryColor": "#1E3A8A",
+    "secondaryColor": "#BE123C",
+    "accentColor": "#FACC15",
     "bgColor": "#07111F"
   },
   "scenes": [
@@ -83,52 +211,56 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
       "type": "cinematic" | "tactics",
       "layout": "hero-impact" | "story-clean" | "split-versus" | "stat-overlay" | "quote-press" | "cta-engage",
       "cameraMotion": "impact-punch" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right",
-      "durationSeconds": 6,
+      "durationSeconds": ${avgSecPerScene},
       "badge": "ETIQUETA BREVE",
       "title": "TITULAR CON IMPACTO",
-      "subtitle": "Frase narrada natural y directa (10 a 18 palabras) en español.",
-      "imagePrompt": "Detailed ENGLISH visual prompt describing a realistic full-bleed vertical 9:16 scene with exact characters, facial expressions, jerseys/outfits, actions, environment, lighting, and camera framing. Never include text or borders.",
-      "fallbackImagePrompt": "Alternative ENGLISH visual prompt describing the same football scene with expressive cinematic sports artwork and zero text.",
-      "highlightValue": "60M €",
+      "subtitle": "Locución natural en español ajustada exactamente al límite de palabras.",
+      "imagePrompt": "Detailed ENGLISH visual prompt describing a realistic full-bleed vertical 9:16 scene matching the exact topic, people/subjects, setting, lighting, and camera angle. Strictly NO text, NO borders.",
+      "fallbackImagePrompt": "Alternative ENGLISH visual prompt describing the same scene in dramatic editorial style with zero text.",
+      "highlightValue": "Dato corto si aplica",
       "stampText": "CLAVE",
-      "quoteText": "Frase corta de titular o contexto si layout es quote-press.",
-      "leftLabel": "Lamine",
-      "leftValue": 78,
-      "rightLabel": "Mbappé",
-      "rightValue": 82,
-      "bullets": ["Opción 1", "Opción 2"],
+      "quoteText": "Frase corta si layout es quote-press",
+      "ctaText": "Llamado a la acción breve si layout es cta-engage",
+      "leftLabel": "Opción A",
+      "leftValue": 70,
+      "rightLabel": "Opción B",
+      "rightValue": 30,
+      "bullets": ["Punto 1", "Punto 2"],
       "tacticCaption": "Solo si type es tactics."
     }
   ]
 }
 
-REGLAS DE ORO PARA QUE CADA VIDEO SEA ÚNICO Y NATURAL:
-1. Adapta el número de escenas (entre 4 y 6) y la estructura narrativa completamente al tema pedido por el usuario. NO repitas siempre el mismo orden de layouts.
-2. Usa "type": "cinematic" para casi todas las escenas. Usa "type": "tactics" ÚNICAMENTE si el usuario pide explícitamente explicar una jugada o movimiento táctico en pizarra.
-3. Adapta "layout" al contenido real de cada escena y evita repetir el mismo layout en dos escenas seguidas:
-   - "hero-impact": apertura o momento explosivo con titular gigante y destello.
-   - "story-clean": escena narrativa cinematográfica limpia para que brille la imagen (ideal para historias, despachos, documentos, momentos de partido, drama).
-   - "split-versus": SOLO cuando el tema compara o enfrenta a dos jugadores o equipos (incluye leftLabel, rightLabel y opcionalmente valores si hay datos reales).
-   - "stat-overlay": SOLO cuando hay una cifra, año, monto o récord real que destacar (pon el dato en highlightValue y una palabra en stampText).
-   - "quote-press": ideal para polémicas, noticias, fichajes, declaraciones o casos institucionales (usa quoteText con un titular de prensa breve).
-   - "cta-engage": cierre con pregunta directa a la audiencia (usa bullets solo si aportan 2 opciones de debate).
-4. Varía "cameraMotion" entre escenas consecutivas ("impact-punch", "zoom-in", "pan-right", "zoom-out", "pan-left") para mantener dinamismo visual constante.
-5. "imagePrompt" SIEMPRE en inglés, muy específico y fotorrealista: describe personas concretas (ej. Lamine Yamal with curly dark hair in FC Barcelona blaugrana jersey, Kylian Mbappé in white Real Madrid jersey, Florentino Pérez in tailored dark suit with glasses in an executive office, referees on pitch, confidential folders on a dark desk, roaring stadium crowd), ángulos de cámara (close-up, low angle, medium shot, over-the-shoulder) e iluminación cinematográfica. Indica composición vertical limpia con espacio arriba y abajo para superponer títulos y subtítulos, SIN texto ni marcos dentro de la imagen.
-6. Adapta "theme" a los colores reales del tema pedido (blaugrana si es del Barça, dorado/oscuro si es Champions o polémica institucional, etc.).`;
+REGLAS ESTRICTAS DE DURACIÓN (CRÍTICO):
+1. Duración objetivo EXACTA: ${effectiveDuration} segundos.
+2. Genera EXACTAMENTE ${sceneCount} escenas cuya suma de "durationSeconds" sea ${effectiveDuration} segundos.
+3. Para que la voz narrada dure ${effectiveDuration} segundos reales, el campo "subtitle" de CADA escena debe tener entre ${minWordsPerScene} y ${maxWordsPerScene} palabras (total aproximado de ${targetTotalWords} palabras entre todas las escenas). NO escribas textos demasiado cortos si el video es largo, ni demasiado largos si el video es corto.
+
+REGLAS DE COHERENCIA VISUAL Y TEMÁTICA:
+4. Usa "type": "cinematic" en todas las escenas. Usa "type": "tactics" ÚNICAMENTE si el usuario pide explicar explícitamente una jugada táctica deportiva en pizarra.
+5. Adapta "theme" a la paleta cromática real del tema (dorado/oscuro para misterio o historia, cian/índigo para tecnología o ciencia, verde/pizarra para finanzas, rojo/ámbar para cocina o drama, blaugrana solo si el tema es del FC Barcelona).
+6. Varía "layout" y "cameraMotion" entre escenas consecutivas para que cada video tenga ritmo único:
+   - "hero-impact": apertura potente o punto culminante.
+   - "story-clean": escena narrativa cinematográfica limpia para que luzca la imagen.
+   - "split-versus": SOLO cuando el tema compara o enfrenta dos conceptos, personas, productos o equipos.
+   - "stat-overlay": SOLO cuando hay una cifra, año, precio o dato clave real.
+   - "quote-press": ideal para noticias, frases célebres, polémicas o investigaciones.
+   - "cta-engage": cierre con pregunta o invitación acorde al tema (incluye "ctaText").
+7. "imagePrompt" SIEMPRE en inglés, muy específico al tema pedido, con encuadre vertical 9:16 limpio y espacio arriba/abajo para títulos y subtítulos, SIN texto ni marcos dentro de la imagen.`;
 
     const buildPayload = (disableThinking) => ({
       system_instruction: { parts: [{ text: systemInstruction }] },
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: "application/json",
-        temperature: 0.8,
-        maxOutputTokens: 6000,
+        temperature: 0.78,
+        maxOutputTokens: 9000,
         ...(disableThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
       },
     });
 
     const startTime = Date.now();
-    const maxBudgetMs = 40000;
+    const maxBudgetMs = 48000;
     let lastResult = { ok: false, status: 503, data: {} };
     let usedModel = primaryModel;
 
@@ -192,6 +324,9 @@ REGLAS DE ORO PARA QUE CADA VIDEO SEA ÚNICO Y NATURAL:
       .trim();
 
     const videoSpec = JSON.parse(cleaned);
+    videoSpec.targetDuration = effectiveDuration;
+    videoSpec.scenes = normalizeSceneDurations(videoSpec.scenes, effectiveDuration);
+
     return new Response(JSON.stringify(videoSpec), {
       status: 200,
       headers: { "Content-Type": "application/json" },
