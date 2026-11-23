@@ -174,11 +174,15 @@ const resolveMediaSrc = (src?: string | null): string | undefined => {
     src.startsWith("blob:") ||
     src.startsWith("http://") ||
     src.startsWith("https://") ||
-    src.startsWith("data:")
+    src.startsWith("data:") ||
+    src.startsWith("/")
   ) {
     return src;
   }
-  return staticFile(src);
+  const hasRemotionStaticBase =
+    typeof window !== "undefined" &&
+    Boolean((window as unknown as { remotion_staticBase?: string }).remotion_staticBase);
+  return hasRemotionStaticBase ? staticFile(src) : "/" + src.replace(/^\/+/, "");
 };
 
 const BrandHeaderBar: React.FC<{
@@ -201,7 +205,7 @@ const BrandHeaderBar: React.FC<{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "18px 34px 22px 38px",
+        padding: "14px 34px 18px 38px",
         boxSizing: "border-box",
         boxShadow: "0 12px 32px rgba(0, 0, 0, 0.48)",
         fontFamily: "system-ui, -apple-system, sans-serif",
@@ -264,12 +268,12 @@ const BrandHeaderBar: React.FC<{
           "div",
           {
             style: {
-              width: 184,
-              height: 106,
-              borderRadius: 18,
+              width: 118,
+              height: 118,
+              borderRadius: 20,
               backgroundColor: "#FFFFFF",
               border: "3px solid #7EC34A",
-              padding: "8px 14px",
+              padding: 8,
               boxSizing: "border-box",
               display: "flex",
               alignItems: "center",
@@ -1295,7 +1299,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
       ? h(
           Sequence,
           { from: isFlyerEnd ? 4 : showMidCallout ? popFrame : 14, durationInFrames: 12 },
-          h(Audio, { src: staticFile("sfx/pop.wav"), volume: 0.16 })
+          h(Audio, { src: resolveMediaSrc("sfx/pop.wav") || "", volume: 0.16 })
         )
       : null,
     isFlyerEnd
@@ -2106,7 +2110,7 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
         ? h(
             Sequence,
             { from: 0, durationInFrames: 14 },
-            h(Audio, { src: staticFile("sfx/whoosh.wav"), volume: 0.22 })
+            h(Audio, { src: resolveMediaSrc("sfx/whoosh.wav") || "", volume: 0.22 })
           )
         : null;
 
