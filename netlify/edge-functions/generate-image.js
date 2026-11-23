@@ -4,7 +4,7 @@ const getEnv = (key) =>
   "";
 
 const GEMINI_API_BASE =
-  "https" + "://[generativelanguage.googleapis.com/v1beta/models](https://generativelanguage.googleapis.com/v1beta/models)";
+  "https" + "://generativelanguage.googleapis.com/v1beta/models";
 
 let cachedModels = null;
 let cachedAt = 0;
