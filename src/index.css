@@ -476,3 +476,64 @@ select:focus {
   background: rgba(56, 189, 248, 0.18);
   color: #ffffff;
 }
+
+.scene-motion-row {
+  display: grid;
+  grid-template-columns: 0.9fr 1.2fr 1fr;
+  gap: 8px;
+}
+
+.callout-input {
+  font-size: 12px !important;
+  color: #fde047 !important;
+}
+
+.icon-btn.active-video {
+  border-color: #38bdf8;
+  color: #7dd3fc;
+  background: rgba(56, 189, 248, 0.14);
+}
+
+.video-chip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  font-size: 12px;
+  color: #bae6fd;
+}
+
+.video-chip-label,
+.video-chip-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mini-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.7);
+  color: #e2e8f0;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.mini-chip-btn.danger {
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fecaca;
+}
+
+@media (max-width: 640px) {
+  .scene-motion-row {
+    grid-template-columns: 1fr;
+  }
+}

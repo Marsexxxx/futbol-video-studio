@@ -3,6 +3,9 @@ const getEnv = (key) =>
   (typeof Deno !== "undefined" && Deno.env?.get(key)) ||
   "";
 
+const GEMINI_API_BASE =
+  "https" + "://[generativelanguage.googleapis.com/v1beta/models](https://generativelanguage.googleapis.com/v1beta/models)";
+
 let cachedModels = null;
 let cachedAt = 0;
 
@@ -25,9 +28,7 @@ async function discoverImageModels(apiKey) {
 
   const discovered = [];
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-    );
+    const res = await fetch(`${GEMINI_API_BASE}?key=${apiKey}`);
     if (res.ok) {
       const data = await res.json();
       const models = data.models || [];
@@ -99,7 +100,7 @@ async function discoverImageModels(apiKey) {
 }
 
 async function callGeminiImage(model, apiKey, promptText, timeoutMs) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
 
   const tryOnce = async (payload) => {
     const controller = new AbortController();
@@ -182,7 +183,7 @@ async function callGeminiImage(model, apiKey, promptText, timeoutMs) {
 async function callImagen(model, apiKey, promptText, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`;
+  const url = `${GEMINI_API_BASE}/${model}:predict?key=${apiKey}`;
 
   try {
     const res = await fetch(url, {
@@ -244,7 +245,9 @@ async function callImagen(model, apiKey, promptText, timeoutMs) {
 
 const VISUAL_STYLES = {
   photoreal:
-    "Ultra-realistic cinematic photography, shot on 85mm lens, shallow depth of field, dramatic lighting, rich realistic textures, Netflix documentary aesthetic, edge-to-edge full-bleed vertical 9:16 frame, strictly NO text, NO letters, NO numbers overlay, NO watermarks, NO borders, NO frames.",
+    "Ultra-realistic cinematic photography, shot on 85mm lens, shallow depth of field, dramatic lighting, rich realistic textures, documentary aesthetic, edge-to-edge full-bleed vertical 9:16 frame, strictly NO text, NO letters, NO numbers overlay, NO watermarks, NO borders, NO frames.",
+  editorial:
+    "Clean modern editorial magazine vector collage illustration, Vox and Johnny Harris documentary aesthetic, bold crisp shapes, subtle halftone paper texture, high-contrast stylized character likeness without uncanny AI photorealism, full-bleed vertical 9:16 frame, strictly NO text, NO letters, NO watermarks, NO frames.",
   hyperart:
     "Hyper-realistic dramatic digital concept artwork, cinematic lighting, rich contrast, expressive lifelike details, volumetric atmosphere, high-budget movie poster style, edge-to-edge full-bleed vertical 9:16 frame, strictly NO text, NO letters, NO watermarks, NO borders, NO frames.",
   editorial3d:
@@ -286,7 +289,7 @@ export default async (req) => {
 
     const styleSuffix = VISUAL_STYLES[visualStyle] || VISUAL_STYLES.photoreal;
     const primaryPrompt = `${basePrompt}. ${styleSuffix}`;
-    const safeRetryPrompt = `${String(fallbackPrompt || basePrompt).trim()}. Dramatic cinematic editorial artwork, atmospheric lighting, rich detail, full-bleed vertical 9:16 frame, strictly NO text, NO borders, NO frames.`;
+    const safeRetryPrompt = `${String(fallbackPrompt || basePrompt).trim()}. Modern editorial documentary artwork, dramatic lighting, rich detail, full-bleed vertical 9:16 frame, strictly NO text, NO borders, NO frames.`;
 
     const candidates = await discoverImageModels(apiKey);
     const startTime = Date.now();

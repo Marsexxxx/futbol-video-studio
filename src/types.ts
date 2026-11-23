@@ -22,15 +22,27 @@ export type CameraMotion =
   | "pan-left"
   | "pan-right";
 
+export type RenderMode = "hybrid" | "editorial" | "cinematic";
+export type TransitionType = "slide-left" | "slide-up" | "wipe" | "fade" | "flip";
+
 export type SubtitleStyle = "dynamic" | "classic";
-export type VisualStyle = "photoreal" | "hyperart" | "editorial3d" | "anime";
+export type VisualStyle =
+  | "photoreal"
+  | "hyperart"
+  | "editorial3d"
+  | "anime"
+  | "editorial";
 export type TopicMode = "auto" | "sports" | "story" | "tech" | "viral" | "cinema";
 
 export interface VideoScene {
   id: string;
   type: SceneType;
+  sceneMode?: RenderMode;
   layout?: SceneLayout;
   cameraMotion?: CameraMotion;
+  transition?: TransitionType;
+  iconName?: string;
+  calloutText?: string;
   durationSeconds: number;
   badge: string;
   title: string;
@@ -49,11 +61,15 @@ export interface VideoScene {
   bullets?: string[];
   tacticCaption?: string;
   imageUrl?: string;
+  videoUrl?: string;
+  videoName?: string;
+  videoMuted?: boolean;
   svgMarkup?: string;
   audioUrl?: string;
   rawAudioDuration?: number;
   audioAssetKey?: string;
   imageAssetKey?: string;
+  videoAssetKey?: string;
 }
 
 export interface VideoTheme {
@@ -69,6 +85,8 @@ export interface VideoSpec {
   scenes: VideoScene[];
   voiceSpeed?: number;
   subtitleStyle?: SubtitleStyle;
+  renderMode?: RenderMode;
+  sfxEnabled?: boolean;
   targetDuration?: number;
   globalAudioKey?: string;
 }

@@ -10,19 +10,118 @@ import {
   staticFile,
   useCurrentFrame,
   useVideoConfig,
+  Video,
 } from "remotion";
+import { TransitionSeries, linearTiming } from "@remotion/transitions";
+import { slide } from "@remotion/transitions/slide";
+import { wipe } from "@remotion/transitions/wipe";
+import { fade } from "@remotion/transitions/fade";
+import { flip } from "@remotion/transitions/flip";
+import { Circle, Rect, Triangle, Star } from "@remotion/shapes";
+import { noise2D } from "@remotion/noise";
+import {
+  AlertTriangle,
+  Award,
+  Banknote,
+  Brain,
+  Briefcase,
+  Clock,
+  Compass,
+  Cpu,
+  Crown,
+  Eye,
+  FileText,
+  Flag,
+  Flame,
+  Gavel,
+  Globe,
+  Heart,
+  Landmark,
+  Lock,
+  Megaphone,
+  Newspaper,
+  Radio,
+  Rocket,
+  Scale,
+  Shield,
+  Sparkles,
+  Swords,
+  Target,
+  TrendingUp,
+  Trophy,
+  Users,
+  Zap,
+} from "lucide-react";
 import {
   CameraMotion,
+  RenderMode,
   SceneLayout,
   SubtitleStyle,
+  TransitionType,
   VideoScene,
   VideoSpec,
   VideoTheme,
 } from "../types";
 
 const h = React.createElement;
+const RemotionVideo = Video as React.ComponentType<any>;
+const TS = TransitionSeries as unknown as React.ComponentType<any>;
+const TSSeq = TransitionSeries.Sequence as unknown as React.ComponentType<any>;
+const TSTrans = TransitionSeries.Transition as unknown as React.ComponentType<any>;
 
 export const SCENE_LEAD_IN_FRAMES = 6;
+export const TRANSITION_FRAMES = 10;
+
+export function getSceneFrames(scene: VideoScene, fps = 30): number {
+  return Math.max(36, Math.ceil((scene.durationSeconds || 5) * fps));
+}
+
+export function getTotalFrames(spec: VideoSpec, fps = 30): number {
+  const scenes = spec?.scenes || [];
+  if (scenes.length === 0) return 30;
+  const rawSum = scenes.reduce((acc, s) => acc + getSceneFrames(s, fps), 0);
+  const overlap = Math.max(0, scenes.length - 1) * TRANSITION_FRAMES;
+  return Math.max(36, rawSum - overlap);
+}
+
+const ICON_MAP: Record<string, React.ComponentType<any>> = {
+  trophy: Trophy,
+  "file-text": FileText,
+  scale: Scale,
+  banknote: Banknote,
+  gavel: Gavel,
+  shield: Shield,
+  flame: Flame,
+  zap: Zap,
+  clock: Clock,
+  globe: Globe,
+  brain: Brain,
+  rocket: Rocket,
+  alert: AlertTriangle,
+  megaphone: Megaphone,
+  target: Target,
+  "trending-up": TrendingUp,
+  lock: Lock,
+  eye: Eye,
+  users: Users,
+  crown: Crown,
+  swords: Swords,
+  sparkles: Sparkles,
+  newspaper: Newspaper,
+  briefcase: Briefcase,
+  landmark: Landmark,
+  cpu: Cpu,
+  heart: Heart,
+  compass: Compass,
+  award: Award,
+  radio: Radio,
+  flag: Flag,
+};
+
+function getIconComponent(name?: string): React.ComponentType<any> {
+  if (name && ICON_MAP[name]) return ICON_MAP[name];
+  return Sparkles;
+}
 
 export type DynamicVideoProps = {
   spec: VideoSpec;
@@ -47,6 +146,8 @@ type SceneCommonProps = {
   voiceSpeed: number;
   subtitleStyle: SubtitleStyle;
   sceneIndex: number;
+  renderMode: RenderMode;
+  sfxEnabled: boolean;
 };
 
 const resolveMediaSrc = (src?: string | null): string | undefined => {
@@ -122,50 +223,6 @@ const buildWordChunks = (
   return chunks;
 };
 
-const SceneTransition: React.FC<{
-  children?: React.ReactNode;
-  isFirst: boolean;
-}> = ({ children, isFirst }) => {
-  const frame = useCurrentFrame();
-  const { durationInFrames } = useVideoConfig();
-
-  const fadeIn = isFirst
-    ? 1
-    : interpolate(frame, [0, 7], [0, 1], {
-        extrapolateLeft: "clamp",
-        extrapolateRight: "clamp",
-      });
-
-  const entryScale = isFirst
-    ? 1
-    : interpolate(frame, [0, 10], [1.05, 1], {
-        extrapolateLeft: "clamp",
-        extrapolateRight: "clamp",
-        easing: Easing.out(Easing.cubic),
-      });
-
-  const fadeOut = interpolate(
-    frame,
-    [Math.max(0, durationInFrames - 6), durationInFrames],
-    [1, 0.85],
-    {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    }
-  );
-
-  return h(
-    AbsoluteFill,
-    {
-      style: {
-        opacity: Math.min(fadeIn, fadeOut),
-        transform: `scale(${entryScale})`,
-      },
-    },
-    children
-  );
-};
-
 const ClassicSubtitle: React.FC<{ text: string; accent: string }> = ({
   text,
   accent,
@@ -180,14 +237,15 @@ const ClassicSubtitle: React.FC<{ text: string; accent: string }> = ({
 
   if (!text) return null;
 
-  return (
-    <div
-      style={{
+  return h(
+    "div",
+    {
+      style: {
         position: "absolute",
         bottom: 94,
         left: 52,
         right: 52,
-        backgroundColor: "rgba(5, 10, 20, 0.82)",
+        backgroundColor: "rgba(5, 10, 20, 0.84)",
         borderLeft: `8px solid ${accent}`,
         borderRadius: 20,
         padding: "24px 30px",
@@ -200,10 +258,9 @@ const ClassicSubtitle: React.FC<{ text: string; accent: string }> = ({
         fontFamily: "system-ui, -apple-system, sans-serif",
         opacity: enter,
         transform: `translateY(${interpolate(enter, [0, 1], [18, 0])}px)`,
-      }}
-    >
-      {text}
-    </div>
+      },
+    },
+    text
   );
 };
 
@@ -244,20 +301,23 @@ const DynamicSubtitle: React.FC<{
     config: { damping: 14, stiffness: 220 },
   });
 
-  return (
-    <div
-      style={{
+  return h(
+    "div",
+    {
+      style: {
         position: "absolute",
-        bottom: 112,
+        bottom: 110,
         left: 42,
         right: 42,
         display: "flex",
         justifyContent: "center",
         pointerEvents: "none",
-      }}
-    >
-      <div
-        style={{
+      },
+    },
+    h(
+      "div",
+      {
+        style: {
           display: "flex",
           flexWrap: "wrap",
           justifyContent: "center",
@@ -266,53 +326,48 @@ const DynamicSubtitle: React.FC<{
           maxWidth: "100%",
           fontFamily: "system-ui, -apple-system, sans-serif",
           transform: `translateY(${interpolate(chunkPop, [0, 1], [14, 0])}px) scale(${interpolate(chunkPop, [0, 1], [0.94, 1])})`,
-        }}
-      >
-        {activeChunk.words.map((word, idx) => {
-          const isCurrent = frame >= word.start && frame < word.end;
-          const isSpoken = frame >= word.end;
-          const wordSpring = isCurrent
-            ? spring({
-                frame: Math.max(0, frame - Math.floor(word.start)),
-                fps,
-                config: { damping: 12, stiffness: 280 },
-              })
-            : 0;
+        },
+      },
+      activeChunk.words.map((word, idx) => {
+        const isCurrent = frame >= word.start && frame < word.end;
+        const isSpoken = frame >= word.end;
+        const wordSpring = isCurrent
+          ? spring({
+              frame: Math.max(0, frame - Math.floor(word.start)),
+              fps,
+              config: { damping: 12, stiffness: 280 },
+            })
+          : 0;
 
-          return (
-            <span
-              key={`${activeChunkIndex}-${idx}`}
-              style={{
-                display: "inline-block",
-                fontSize: 54,
-                fontWeight: 900,
-                letterSpacing: -0.6,
-                lineHeight: 1.12,
-                padding: isCurrent ? "6px 18px" : "6px 8px",
-                borderRadius: 16,
-                backgroundColor: isCurrent ? accent : "rgba(6, 12, 24, 0.55)",
-                color: isCurrent
-                  ? "#07111F"
-                  : isSpoken
-                  ? "#FFFFFF"
-                  : "rgba(255, 255, 255, 0.72)",
-                transform: isCurrent
-                  ? `scale(${interpolate(wordSpring, [0, 1], [0.9, 1.1])})`
-                  : "scale(1)",
-                textShadow: isCurrent
-                  ? "none"
-                  : "0 4px 16px rgba(0, 0, 0, 0.9)",
-                boxShadow: isCurrent
-                  ? "0 10px 26px rgba(0, 0, 0, 0.45)"
-                  : "none",
-              }}
-            >
-              {word.text}
-            </span>
-          );
-        })}
-      </div>
-    </div>
+        return h(
+          "span",
+          {
+            key: `${activeChunkIndex}-${idx}`,
+            style: {
+              display: "inline-block",
+              fontSize: 54,
+              fontWeight: 900,
+              letterSpacing: -0.6,
+              lineHeight: 1.12,
+              padding: isCurrent ? "6px 18px" : "6px 8px",
+              borderRadius: 16,
+              backgroundColor: isCurrent ? accent : "rgba(6, 12, 24, 0.58)",
+              color: isCurrent
+                ? "#07111F"
+                : isSpoken
+                ? "#FFFFFF"
+                : "rgba(255, 255, 255, 0.72)",
+              transform: isCurrent
+                ? `scale(${interpolate(wordSpring, [0, 1], [0.9, 1.1])})`
+                : "scale(1)",
+              textShadow: isCurrent ? "none" : "0 4px 16px rgba(0, 0, 0, 0.9)",
+              boxShadow: isCurrent ? "0 10px 26px rgba(0, 0, 0, 0.45)" : "none",
+            },
+          },
+          word.text
+        );
+      })
+    )
   );
 };
 
@@ -328,12 +383,150 @@ const SceneSubtitle: React.FC<{
   return h(DynamicSubtitle, { scene, accent, voiceSpeed });
 };
 
+const EditorialBackdrop: React.FC<{
+  theme: VideoTheme;
+  sceneIndex: number;
+}> = ({ theme, sceneIndex }) => {
+  const frame = useCurrentFrame();
+  const { durationInFrames } = useVideoConfig();
+  const progress = interpolate(frame, [0, Math.max(1, durationInFrames)], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  const nx1 = noise2D(`orb-x-${sceneIndex}`, frame * 0.008, 0.2) * 210;
+  const ny1 = noise2D(`orb-y-${sceneIndex}`, 0.4, frame * 0.008) * 240;
+  const nx2 = noise2D(`orb2-x-${sceneIndex}`, frame * 0.007, 1.1) * 180;
+  const ny2 = noise2D(`orb2-y-${sceneIndex}`, 1.7, frame * 0.007) * 210;
+  const gridShift = (frame * 1.15) % 80;
+  const rot1 = frame * 0.65 + sceneIndex * 35;
+  const rot2 = -frame * 0.5 + sceneIndex * 50;
+
+  return h(
+    AbsoluteFill,
+    { style: { backgroundColor: theme.bgColor, overflow: "hidden" } },
+    h(AbsoluteFill, {
+      style: {
+        background: `radial-gradient(circle at ${520 + nx1}px ${640 + ny1}px, ${theme.primaryColor}CC 0%, ${theme.bgColor} 58%), radial-gradient(circle at ${560 + nx2}px ${1320 + ny2}px, ${theme.secondaryColor}88 0%, transparent 55%)`,
+      },
+    }),
+    h(AbsoluteFill, {
+      style: {
+        backgroundImage:
+          "linear-gradient(rgba(255,255,255,0.06) 2px, transparent 2px), linear-gradient(90deg, rgba(255,255,255,0.06) 2px, transparent 2px)",
+        backgroundSize: "80px 80px",
+        backgroundPosition: `${gridShift}px ${gridShift}px`,
+      },
+    }),
+    h(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          top: 260 + ny1 * 0.35,
+          left: 70 + nx1 * 0.25,
+          opacity: 0.22,
+          transform: `rotate(${rot1}deg)`,
+        },
+      },
+      h(Triangle, {
+        length: 150,
+        direction: "up",
+        fill: "none",
+        stroke: theme.accentColor,
+        strokeWidth: 7,
+      })
+    ),
+    h(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          top: 440 + ny2 * 0.3,
+          right: 64 + nx2 * 0.2,
+          opacity: 0.2,
+          transform: `rotate(${rot2}deg)`,
+        },
+      },
+      h(Star, {
+        points: 5,
+        innerRadius: 34,
+        outerRadius: 72,
+        fill: "none",
+        stroke: "#FFFFFF",
+        strokeWidth: 5,
+      })
+    ),
+    h(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          bottom: 430 - ny1 * 0.25,
+          left: 88,
+          opacity: 0.16,
+        },
+      },
+      h(Circle, {
+        radius: 68,
+        fill: "none",
+        stroke: theme.accentColor,
+        strokeWidth: 6,
+      })
+    ),
+    h(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          bottom: 480 + ny2 * 0.25,
+          right: 90,
+          opacity: 0.16,
+          transform: `rotate(${rot1 * 0.7}deg)`,
+        },
+      },
+      h(Rect, {
+        width: 110,
+        height: 110,
+        cornerRadius: 20,
+        fill: "none",
+        stroke: theme.secondaryColor,
+        strokeWidth: 7,
+      })
+    ),
+    h(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          top: 28,
+          left: 44,
+          right: 44,
+          height: 6,
+          borderRadius: 999,
+          backgroundColor: "rgba(255,255,255,0.22)",
+          overflow: "hidden",
+        },
+      },
+      h("div", {
+        style: {
+          width: `${progress * 100}%`,
+          height: "100%",
+          backgroundColor: theme.accentColor,
+        },
+      })
+    )
+  );
+};
+
 const AnimatedBackdrop: React.FC<{
   imgSrc?: string;
+  videoSrc?: string;
+  videoMuted?: boolean;
   theme: VideoTheme;
   motion: CameraMotion;
   sceneIndex: number;
-}> = ({ imgSrc, theme, motion, sceneIndex }) => {
+}> = ({ imgSrc, videoSrc, videoMuted = true, theme, motion, sceneIndex }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const progress = interpolate(frame, [0, Math.max(1, durationInFrames)], [0, 1], {
@@ -371,7 +564,7 @@ const AnimatedBackdrop: React.FC<{
 
   const flashOpacity =
     motion === "impact-punch"
-      ? interpolate(frame, [0, 9], [0.5, 0], {
+      ? interpolate(frame, [0, 9], [0.46, 0], {
           extrapolateLeft: "clamp",
           extrapolateRight: "clamp",
         })
@@ -381,6 +574,35 @@ const AnimatedBackdrop: React.FC<{
   const orbX = 240 + Math.sin(frame * 0.03 + sceneIndex) * 180;
   const orbY = 620 + Math.cos(frame * 0.025 + sceneIndex) * 140;
 
+  const mediaNode = videoSrc
+    ? h(RemotionVideo, {
+        src: videoSrc,
+        muted: videoMuted,
+        loop: true,
+        style: {
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          transform: `translate3d(${tx * 0.4}px, ${ty * 0.4}px, 0) scale(${1 + (scale - 1) * 0.45})`,
+        },
+      })
+    : imgSrc
+    ? h(Img, {
+        src: imgSrc || "",
+        style: {
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`,
+        },
+      })
+    : h(AbsoluteFill, {
+        style: {
+          background: `radial-gradient(circle at ${orbX}px ${orbY}px, ${theme.primaryColor} 0%, ${theme.bgColor} 58%, ${theme.secondaryColor} 100%)`,
+          transform: `scale(${scale})`,
+        },
+      });
+
   return h(
     AbsoluteFill,
     {
@@ -389,30 +611,15 @@ const AnimatedBackdrop: React.FC<{
         overflow: "hidden",
       },
     },
-    imgSrc
-      ? h(Img, {
-          src: imgSrc,
-          style: {
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`,
-          },
-        })
-      : h(AbsoluteFill, {
-          style: {
-            background: `radial-gradient(circle at ${orbX}px ${orbY}px, ${theme.primaryColor} 0%, ${theme.bgColor} 58%, ${theme.secondaryColor} 100%)`,
-            transform: `scale(${scale})`,
-          },
-        }),
+    mediaNode,
     h(AbsoluteFill, {
       style: {
         background:
-          "linear-gradient(180deg, rgba(4,9,20,0.78) 0%, rgba(4,9,20,0.18) 28%, rgba(4,9,20,0.06) 54%, rgba(4,9,20,0.86) 100%)",
+          "linear-gradient(180deg, rgba(4,9,20,0.78) 0%, rgba(4,9,20,0.16) 28%, rgba(4,9,20,0.06) 54%, rgba(4,9,20,0.86) 100%)",
       },
     }),
-    <div
-      style={{
+    h("div", {
+      style: {
         position: "absolute",
         top: -200,
         left: sweepX,
@@ -422,28 +629,30 @@ const AnimatedBackdrop: React.FC<{
           "linear-gradient(90deg, transparent, rgba(255,255,255,0.09), transparent)",
         transform: "rotate(18deg)",
         pointerEvents: "none",
-      }}
-    />,
-    <div
-      style={{
-        position: "absolute",
-        top: 28,
-        left: 44,
-        right: 44,
-        height: 6,
-        borderRadius: 999,
-        backgroundColor: "rgba(255,255,255,0.22)",
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
+      },
+    }),
+    h(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          top: 28,
+          left: 44,
+          right: 44,
+          height: 6,
+          borderRadius: 999,
+          backgroundColor: "rgba(255,255,255,0.22)",
+          overflow: "hidden",
+        },
+      },
+      h("div", {
+        style: {
           width: `${progress * 100}%`,
           height: "100%",
           backgroundColor: theme.accentColor,
-        }}
-      />
-    </div>,
+        },
+      })
+    ),
     flashOpacity > 0
       ? h(AbsoluteFill, {
           style: {
@@ -453,6 +662,233 @@ const AnimatedBackdrop: React.FC<{
           },
         })
       : null
+  );
+};
+
+const EditorialCenterStage: React.FC<{
+  scene: VideoScene;
+  theme: VideoTheme;
+  imgSrc?: string;
+  videoSrc?: string;
+  videoMuted?: boolean;
+}> = ({ scene, theme, imgSrc, videoSrc, videoMuted = true }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const IconComp = getIconComponent(scene.iconName);
+
+  const enter = spring({
+    frame: Math.max(0, frame - 6),
+    fps,
+    config: { damping: 12, stiffness: 150 },
+  });
+  const floatY = Math.sin(frame * 0.065) * 10;
+  const ringPulse = 1 + Math.sin(frame * 0.09) * 0.06;
+  const tilt = interpolate(enter, [0, 1], [-8, -1.8]);
+
+  if (videoSrc || imgSrc) {
+    return h(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          top: 470,
+          left: 90,
+          right: 90,
+          height: 690,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          opacity: enter,
+          transform: `translateY(${floatY}px) rotate(${tilt}deg) scale(${interpolate(enter, [0, 1], [0.85, 1])})`,
+        },
+      },
+      h(
+        "div",
+        {
+          style: {
+            position: "relative",
+            width: "100%",
+            height: "100%",
+            borderRadius: 36,
+            overflow: "hidden",
+            border: `7px solid ${theme.accentColor}`,
+            boxShadow: "0 30px 70px rgba(0,0,0,0.65)",
+            backgroundColor: "#060C18",
+          },
+        },
+        videoSrc
+          ? h(RemotionVideo, {
+              src: videoSrc,
+              muted: videoMuted,
+              loop: true,
+              style: { width: "100%", height: "100%", objectFit: "cover" },
+            })
+          : h(Img, {
+              src: imgSrc || "",
+              style: { width: "100%", height: "100%", objectFit: "cover" },
+            }),
+        h(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              top: 22,
+              right: 22,
+              width: 86,
+              height: 86,
+              borderRadius: 24,
+              backgroundColor: theme.accentColor,
+              color: "#07111F",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 12px 28px rgba(0,0,0,0.45)",
+            },
+          },
+          h(IconComp, { size: 46, strokeWidth: 2.6 })
+        )
+      )
+    );
+  }
+
+  return h(
+    "div",
+    {
+      style: {
+        position: "absolute",
+        top: 500,
+        left: 0,
+        right: 0,
+        height: 540,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        pointerEvents: "none",
+      },
+    },
+    h("div", {
+      style: {
+        position: "absolute",
+        width: 470,
+        height: 470,
+        borderRadius: 999,
+        border: `4px dashed ${theme.accentColor}66`,
+        transform: `rotate(${frame * 0.45}deg) scale(${ringPulse})`,
+      },
+    }),
+    h("div", {
+      style: {
+        position: "absolute",
+        width: 370,
+        height: 370,
+        borderRadius: 999,
+        background: `radial-gradient(circle, ${theme.accentColor}38 0%, transparent 72%)`,
+        transform: `scale(${ringPulse})`,
+      },
+    }),
+    h(
+      "div",
+      {
+        style: {
+          width: 310,
+          height: 310,
+          borderRadius: 72,
+          background: `linear-gradient(145deg, ${theme.primaryColor}, ${theme.secondaryColor})`,
+          border: `7px solid ${theme.accentColor}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 28px 70px rgba(0,0,0,0.58)",
+          opacity: enter,
+          transform: `translateY(${floatY}px) scale(${interpolate(enter, [0, 1], [0.55, 1])}) rotate(${interpolate(enter, [0, 1], [-14, 0])}deg)`,
+        },
+      },
+      h(IconComp, { size: 158, color: "#FFFFFF", strokeWidth: 2.1 })
+    )
+  );
+};
+
+const MidSceneCallout: React.FC<{
+  scene: VideoScene;
+  theme: VideoTheme;
+  isEditorial: boolean;
+}> = ({ scene, theme, isEditorial }) => {
+  const frame = useCurrentFrame();
+  const { fps, durationInFrames } = useVideoConfig();
+
+  if (!scene.calloutText?.trim()) return null;
+
+  const triggerFrame = Math.min(28, Math.max(16, Math.round(durationInFrames * 0.3)));
+  const pop = spring({
+    frame: Math.max(0, frame - triggerFrame),
+    fps,
+    config: { damping: 12, stiffness: 230 },
+  });
+
+  if (frame < triggerFrame) return null;
+
+  const IconComp = getIconComponent(scene.iconName);
+
+  return h(
+    "div",
+    {
+      style: {
+        position: "absolute",
+        bottom: isEditorial ? 430 : 390,
+        left: 52,
+        right: 52,
+        display: "flex",
+        justifyContent: "center",
+        pointerEvents: "none",
+      },
+    },
+    h(
+      "div",
+      {
+        style: {
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 18,
+          padding: "18px 30px",
+          borderRadius: 999,
+          backgroundColor: "rgba(7, 17, 31, 0.9)",
+          border: `4px solid ${theme.accentColor}`,
+          boxShadow: "0 18px 42px rgba(0,0,0,0.6)",
+          opacity: pop,
+          transform: `translateY(${interpolate(pop, [0, 1], [34, 0])}px) scale(${interpolate(pop, [0, 1], [0.75, 1])})`,
+        },
+      },
+      h(
+        "div",
+        {
+          style: {
+            width: 56,
+            height: 56,
+            borderRadius: 999,
+            backgroundColor: theme.accentColor,
+            color: "#07111F",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          },
+        },
+        h(IconComp, { size: 32, strokeWidth: 2.6 })
+      ),
+      h(
+        "span",
+        {
+          style: {
+            fontSize: 36,
+            fontWeight: 900,
+            letterSpacing: 1,
+            color: "#FFFFFF",
+            textTransform: "uppercase",
+          },
+        },
+        scene.calloutText
+      )
+    )
   );
 };
 
@@ -477,18 +913,34 @@ const inferMotion = (scene: VideoScene, index: number): CameraMotion => {
   return cycle[index % cycle.length];
 };
 
-const SceneCinematic: React.FC<SceneCommonProps> = ({
+const resolveSceneMode = (
+  scene: VideoScene,
+  globalMode: RenderMode
+): RenderMode => {
+  if (scene.sceneMode) return scene.sceneMode;
+  return globalMode;
+};
+
+const SceneDynamic: React.FC<SceneCommonProps> = ({
   scene,
   theme,
   voiceSpeed,
   subtitleStyle,
   sceneIndex,
+  renderMode,
+  sfxEnabled,
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
   const layout = inferLayout(scene);
   const motion = inferMotion(scene, sceneIndex);
+  const activeMode = resolveSceneMode(scene, renderMode);
+  const isEditorial = activeMode === "editorial";
+  const isHybrid = activeMode === "hybrid";
+
   const imgSrc = resolveMediaSrc(scene.imageUrl);
+  const videoSrc = resolveMediaSrc(scene.videoUrl);
+  const IconComp = getIconComponent(scene.iconName);
 
   const titleSpring = spring({
     frame: Math.max(0, frame - 2),
@@ -514,6 +966,16 @@ const SceneCinematic: React.FC<SceneCommonProps> = ({
     easing: Easing.out(Easing.cubic),
   });
 
+  const showMidCallout =
+    (isEditorial || isHybrid) &&
+    Boolean(scene.calloutText?.trim()) &&
+    layout !== "split-versus" &&
+    layout !== "stat-overlay" &&
+    layout !== "quote-press" &&
+    layout !== "cta-engage";
+
+  const popFrame = Math.min(28, Math.max(16, Math.round(durationInFrames * 0.3)));
+
   return h(
     AbsoluteFill,
     {
@@ -522,447 +984,589 @@ const SceneCinematic: React.FC<SceneCommonProps> = ({
         color: "#FFFFFF",
       },
     },
-    h(AnimatedBackdrop, { imgSrc, theme, motion, sceneIndex }),
-    layout === "hero-impact" ? (
-      <div
-        style={{
-          position: "absolute",
-          top: 86,
-          left: 52,
-          right: 52,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          textAlign: "center",
-        }}
-      >
-        <div
-          style={{
-            padding: "10px 28px",
-            borderRadius: 999,
-            backgroundColor: theme.secondaryColor,
-            color: "#FFFFFF",
-            fontSize: 26,
-            fontWeight: 900,
-            letterSpacing: 4,
-            marginBottom: 22,
-            boxShadow: "0 10px 26px rgba(0,0,0,0.45)",
-            opacity: titleSpring,
-            transform: `translateY(${interpolate(titleSpring, [0, 1], [-24, 0])}px)`,
-          }}
-        >
-          {scene.badge}
-        </div>
-        <h1
-          style={{
-            margin: 0,
-            fontSize: 88,
-            fontWeight: 900,
-            lineHeight: 0.98,
-            letterSpacing: -2,
-            textTransform: "uppercase",
-            textShadow: "0 10px 32px rgba(0,0,0,0.85)",
-            transform: `scale(${interpolate(titleSpring, [0, 1], [1.18, 1])})`,
-            opacity: titleSpring,
-          }}
-        >
-          {scene.title}
-        </h1>
-        <div
-          style={{
-            marginTop: 22,
-            height: 8,
-            width: interpolate(detailSpring, [0, 1], [0, 260]),
-            borderRadius: 999,
-            backgroundColor: theme.accentColor,
-            boxShadow: `0 0 24px ${theme.accentColor}`,
-          }}
-        />
-      </div>
-    ) : null,
-    layout === "story-clean" ? (
-      <div
-        style={{
-          position: "absolute",
-          top: 82,
-          left: 52,
-          right: 52,
-        }}
-      >
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 12,
-            padding: "8px 22px",
-            borderRadius: 12,
-            backgroundColor: "rgba(6, 12, 24, 0.72)",
-            borderLeft: `6px solid ${theme.accentColor}`,
-            color: theme.accentColor,
-            fontSize: 24,
-            fontWeight: 900,
-            letterSpacing: 3,
-            marginBottom: 18,
-            opacity: titleSpring,
-            transform: `translateX(${interpolate(titleSpring, [0, 1], [-36, 0])}px)`,
-          }}
-        >
-          {scene.badge}
-        </div>
-        <h2
-          style={{
-            margin: 0,
-            fontSize: 64,
-            fontWeight: 900,
-            lineHeight: 1.05,
-            textShadow: "0 8px 28px rgba(0,0,0,0.9)",
-            opacity: titleSpring,
-            transform: `translateY(${interpolate(titleSpring, [0, 1], [24, 0])}px)`,
-          }}
-        >
-          {scene.title}
-        </h2>
-      </div>
-    ) : null,
-    layout === "split-versus" ? (
-      <>
-        <div
-          style={{
-            position: "absolute",
-            top: 78,
-            left: 48,
-            right: 48,
-            textAlign: "center",
-          }}
-        >
-          <div
-            style={{
-              display: "inline-block",
-              padding: "8px 24px",
-              borderRadius: 999,
-              backgroundColor: "rgba(0,0,0,0.65)",
-              border: `2px solid ${theme.accentColor}`,
-              color: theme.accentColor,
-              fontSize: 24,
-              fontWeight: 900,
-              letterSpacing: 4,
-              marginBottom: 14,
-            }}
-          >
-            {scene.badge}
-          </div>
-          <h2
-            style={{
-              margin: 0,
-              fontSize: 64,
-              fontWeight: 900,
-              lineHeight: 1.04,
-              textShadow: "0 8px 26px rgba(0,0,0,0.9)",
-            }}
-          >
-            {scene.title}
-          </h2>
-        </div>
-
-        <div
-          style={{
-            position: "absolute",
-            bottom: 340,
-            left: 48,
-            right: 48,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 18,
-            opacity: detailSpring,
-            transform: `translateY(${interpolate(detailSpring, [0, 1], [30, 0])}px)`,
-          }}
-        >
-          <div
-            style={{
-              flex: 1,
-              background: `linear-gradient(135deg, ${theme.primaryColor}E6, rgba(7,17,31,0.88))`,
-              borderBottom: `6px solid ${theme.accentColor}`,
-              borderRadius: 20,
-              padding: "20px 24px",
-            }}
-          >
-            <div style={{ fontSize: 30, fontWeight: 900, textTransform: "uppercase" }}>
-              {scene.leftLabel || "A"}
-            </div>
-            {typeof scene.leftValue === "number" && (
-              <div style={{ fontSize: 52, fontWeight: 900, color: theme.accentColor }}>
-                {Math.round(leftAnim)}
-              </div>
-            )}
-          </div>
-
-          <div
-            style={{
-              width: 82,
-              height: 82,
-              borderRadius: 999,
-              backgroundColor: theme.accentColor,
-              color: "#07111F",
+    isEditorial
+      ? h(EditorialBackdrop, { theme, sceneIndex })
+      : h(AnimatedBackdrop, {
+          imgSrc,
+          videoSrc,
+          videoMuted: scene.videoMuted !== false,
+          theme,
+          motion,
+          sceneIndex,
+        }),
+    sfxEnabled && (showMidCallout || layout === "stat-overlay")
+      ? h(
+          Sequence,
+          { from: showMidCallout ? popFrame : 14, durationInFrames: 12 },
+          h(Audio, { src: staticFile("sfx/pop.wav"), volume: 0.16 })
+        )
+      : null,
+    isEditorial &&
+      layout !== "split-versus" &&
+      layout !== "stat-overlay" &&
+      layout !== "cta-engage"
+      ? h(EditorialCenterStage, {
+          scene,
+          theme,
+          imgSrc,
+          videoSrc,
+          videoMuted: scene.videoMuted !== false,
+        })
+      : null,
+    isHybrid && !isEditorial && scene.iconName
+      ? h(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              top: 66,
+              right: 48,
+              width: 90,
+              height: 90,
+              borderRadius: 26,
+              backgroundColor: "rgba(7, 17, 31, 0.78)",
+              border: `4px solid ${theme.accentColor}`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 34,
-              fontWeight: 900,
-              boxShadow: "0 12px 30px rgba(0,0,0,0.6)",
-            }}
-          >
-            VS
-          </div>
-
-          <div
-            style={{
-              flex: 1,
-              background: `linear-gradient(135deg, ${theme.secondaryColor}E6, rgba(7,17,31,0.88))`,
-              borderBottom: "6px solid #FFFFFF",
-              borderRadius: 20,
-              padding: "20px 24px",
-              textAlign: "right",
-            }}
-          >
-            <div style={{ fontSize: 30, fontWeight: 900, textTransform: "uppercase" }}>
-              {scene.rightLabel || "B"}
-            </div>
-            {typeof scene.rightValue === "number" && (
-              <div style={{ fontSize: 52, fontWeight: 900, color: "#FFFFFF" }}>
-                {Math.round(rightAnim)}
-              </div>
-            )}
-          </div>
-        </div>
-      </>
-    ) : null,
-    layout === "stat-overlay" ? (
-      <>
-        <div style={{ position: "absolute", top: 82, left: 52, right: 52 }}>
-          <div
-            style={{
-              color: theme.accentColor,
-              fontSize: 26,
-              fontWeight: 900,
-              letterSpacing: 4,
-              textShadow: "0 4px 16px rgba(0,0,0,0.9)",
-            }}
-          >
-            {scene.badge}
-          </div>
-          <h2
-            style={{
-              margin: "10px 0 0 0",
-              fontSize: 64,
-              fontWeight: 900,
-              lineHeight: 1.05,
-              textShadow: "0 8px 26px rgba(0,0,0,0.9)",
-            }}
-          >
-            {scene.title}
-          </h2>
-        </div>
-
-        <div
-          style={{
-            position: "absolute",
-            bottom: 350,
-            left: 52,
-            right: 52,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            opacity: detailSpring,
-            transform: `scale(${interpolate(detailSpring, [0, 1], [0.75, 1])})`,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 156,
-              fontWeight: 900,
-              lineHeight: 0.95,
-              color: theme.accentColor,
-              textShadow: "0 14px 40px rgba(0,0,0,0.95)",
-              letterSpacing: -4,
-            }}
-          >
-            {scene.highlightValue || "100%"}
-          </div>
-          {scene.stampText && (
-            <div
-              style={{
-                marginTop: 14,
-                padding: "10px 30px",
-                borderRadius: 12,
-                backgroundColor: theme.secondaryColor,
-                color: "#FFFFFF",
-                fontSize: 34,
-                fontWeight: 900,
-                letterSpacing: 4,
-                transform: "rotate(-2.5deg)",
-                boxShadow: "0 14px 32px rgba(0,0,0,0.55)",
-              }}
-            >
-              {scene.stampText}
-            </div>
-          )}
-        </div>
-      </>
-    ) : null,
-    layout === "quote-press" ? (
-      <>
-        <div style={{ position: "absolute", top: 82, left: 52, right: 52 }}>
-          <div
-            style={{
-              display: "inline-block",
-              padding: "8px 22px",
-              borderRadius: 8,
-              backgroundColor: "#DC2626",
-              color: "#FFFFFF",
-              fontSize: 24,
-              fontWeight: 900,
-              letterSpacing: 3,
-              marginBottom: 16,
-            }}
-          >
-            {scene.badge || "ÚLTIMA HORA"}
-          </div>
-          <h2
-            style={{
-              margin: 0,
-              fontSize: 64,
-              fontWeight: 900,
-              lineHeight: 1.04,
-              textShadow: "0 8px 28px rgba(0,0,0,0.9)",
-            }}
-          >
-            {scene.title}
-          </h2>
-        </div>
-
-        {scene.quoteText && (
-          <div
-            style={{
+              boxShadow: "0 14px 32px rgba(0,0,0,0.5)",
+              opacity: detailSpring,
+              transform: `scale(${interpolate(detailSpring, [0, 1], [0.5, 1])}) rotate(${Math.sin(frame * 0.08) * 4}deg)`,
+            },
+          },
+          h(IconComp, { size: 46, color: theme.accentColor, strokeWidth: 2.4 })
+        )
+      : null,
+    layout === "hero-impact"
+      ? h(
+          "div",
+          {
+            style: {
               position: "absolute",
-              bottom: 350,
+              top: 86,
               left: 52,
               right: 52,
-              backgroundColor: "rgba(7, 17, 31, 0.82)",
-              borderLeft: `10px solid ${theme.accentColor}`,
-              borderRadius: 20,
-              padding: "26px 32px",
-              fontSize: 36,
-              fontWeight: 800,
-              lineHeight: 1.25,
-              boxShadow: "0 18px 40px rgba(0,0,0,0.6)",
-              opacity: detailSpring,
-              transform: `translateX(${interpolate(detailSpring, [0, 1], [-45, 0])}px)`,
-            }}
-          >
-            “{scene.quoteText}”
-          </div>
-        )}
-      </>
-    ) : null,
-    layout === "cta-engage" ? (
-      <>
-        <div
-          style={{
-            position: "absolute",
-            top: 90,
-            left: 52,
-            right: 52,
-            textAlign: "center",
-          }}
-        >
-          <div
-            style={{
-              color: theme.accentColor,
-              fontSize: 26,
-              fontWeight: 900,
-              letterSpacing: 4,
-              marginBottom: 14,
-            }}
-          >
-            {scene.badge}
-          </div>
-          <h2
-            style={{
-              margin: 0,
-              fontSize: 72,
-              fontWeight: 900,
-              lineHeight: 1.04,
-              textShadow: "0 10px 30px rgba(0,0,0,0.9)",
-            }}
-          >
-            {scene.title}
-          </h2>
-        </div>
-
-        <div
-          style={{
-            position: "absolute",
-            bottom: 350,
-            left: 52,
-            right: 52,
-            display: "flex",
-            flexDirection: "column",
-            gap: 18,
-            opacity: detailSpring,
-            transform: `translateY(${interpolate(detailSpring, [0, 1], [28, 0])}px)`,
-          }}
-        >
-          {(scene.bullets || []).slice(0, 2).map((b, i) => (
-            <div
-              key={i}
-              style={{
-                backgroundColor: "rgba(7, 17, 31, 0.8)",
-                border: `3px solid ${i === 0 ? theme.accentColor : "rgba(255,255,255,0.4)"}`,
-                borderRadius: 22,
-                padding: "22px 28px",
-                fontSize: 34,
-                fontWeight: 800,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              textAlign: "center",
+            },
+          },
+          h(
+            "div",
+            {
+              style: {
+                padding: "10px 28px",
+                borderRadius: 999,
+                backgroundColor: theme.secondaryColor,
+                color: "#FFFFFF",
+                fontSize: 26,
+                fontWeight: 900,
+                letterSpacing: 4,
+                marginBottom: 22,
+                boxShadow: "0 10px 26px rgba(0,0,0,0.45)",
+                opacity: titleSpring,
+                transform: `translateY(${interpolate(titleSpring, [0, 1], [-24, 0])}px)`,
+              },
+            },
+            scene.badge
+          ),
+          h(
+            "h1",
+            {
+              style: {
+                margin: 0,
+                fontSize: 84,
+                fontWeight: 900,
+                lineHeight: 0.98,
+                letterSpacing: -2,
+                textTransform: "uppercase",
+                textShadow: "0 10px 32px rgba(0,0,0,0.85)",
+                transform: `scale(${interpolate(titleSpring, [0, 1], [1.18, 1])})`,
+                opacity: titleSpring,
+              },
+            },
+            scene.title
+          ),
+          h("div", {
+            style: {
+              marginTop: 22,
+              height: 8,
+              width: interpolate(detailSpring, [0, 1], [0, 260]),
+              borderRadius: 999,
+              backgroundColor: theme.accentColor,
+              boxShadow: `0 0 24px ${theme.accentColor}`,
+            },
+          })
+        )
+      : null,
+    layout === "story-clean"
+      ? h(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              top: 82,
+              left: 52,
+              right: isHybrid ? 150 : 52,
+            },
+          },
+          h(
+            "div",
+            {
+              style: {
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "8px 22px",
+                borderRadius: 12,
+                backgroundColor: "rgba(6, 12, 24, 0.72)",
+                borderLeft: `6px solid ${theme.accentColor}`,
+                color: theme.accentColor,
+                fontSize: 24,
+                fontWeight: 900,
+                letterSpacing: 3,
+                marginBottom: 18,
+                opacity: titleSpring,
+                transform: `translateX(${interpolate(titleSpring, [0, 1], [-36, 0])}px)`,
+              },
+            },
+            scene.badge
+          ),
+          h(
+            "h2",
+            {
+              style: {
+                margin: 0,
+                fontSize: 62,
+                fontWeight: 900,
+                lineHeight: 1.05,
+                textShadow: "0 8px 28px rgba(0,0,0,0.9)",
+                opacity: titleSpring,
+                transform: `translateY(${interpolate(titleSpring, [0, 1], [24, 0])}px)`,
+              },
+            },
+            scene.title
+          )
+        )
+      : null,
+    layout === "split-versus"
+      ? h(
+          React.Fragment,
+          null,
+          h(
+            "div",
+            {
+              style: {
+                position: "absolute",
+                top: 78,
+                left: 48,
+                right: 48,
+                textAlign: "center",
+              },
+            },
+            h(
+              "div",
+              {
+                style: {
+                  display: "inline-block",
+                  padding: "8px 24px",
+                  borderRadius: 999,
+                  backgroundColor: "rgba(0,0,0,0.65)",
+                  border: `2px solid ${theme.accentColor}`,
+                  color: theme.accentColor,
+                  fontSize: 24,
+                  fontWeight: 900,
+                  letterSpacing: 4,
+                  marginBottom: 14,
+                },
+              },
+              scene.badge
+            ),
+            h(
+              "h2",
+              {
+                style: {
+                  margin: 0,
+                  fontSize: 64,
+                  fontWeight: 900,
+                  lineHeight: 1.04,
+                  textShadow: "0 8px 26px rgba(0,0,0,0.9)",
+                },
+              },
+              scene.title
+            )
+          ),
+          h(
+            "div",
+            {
+              style: {
+                position: "absolute",
+                bottom: 350,
+                left: 48,
+                right: 48,
                 display: "flex",
                 alignItems: "center",
+                justifyContent: "space-between",
                 gap: 18,
-              }}
-            >
-              <span
-                style={{
-                  minWidth: 48,
-                  height: 48,
-                  borderRadius: 12,
+                opacity: detailSpring,
+                transform: `translateY(${interpolate(detailSpring, [0, 1], [30, 0])}px)`,
+              },
+            },
+            h(
+              "div",
+              {
+                style: {
+                  flex: 1,
+                  background: `linear-gradient(135deg, ${theme.primaryColor}E6, rgba(7,17,31,0.9))`,
+                  borderBottom: `6px solid ${theme.accentColor}`,
+                  borderRadius: 20,
+                  padding: "22px 24px",
+                },
+              },
+              h(
+                "div",
+                { style: { fontSize: 30, fontWeight: 900, textTransform: "uppercase" } },
+                scene.leftLabel || "A"
+              ),
+              typeof scene.leftValue === "number"
+                ? h(
+                    "div",
+                    { style: { fontSize: 52, fontWeight: 900, color: theme.accentColor } },
+                    Math.round(leftAnim)
+                  )
+                : null
+            ),
+            h(
+              "div",
+              {
+                style: {
+                  width: 82,
+                  height: 82,
+                  borderRadius: 999,
                   backgroundColor: theme.accentColor,
                   color: "#07111F",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  fontSize: 34,
                   fontWeight: 900,
-                }}
-              >
-                {i + 1}
-              </span>
-              <span>{b}</span>
-            </div>
-          ))}
-          <div
-            style={{
-              backgroundColor: theme.accentColor,
-              color: "#07111F",
-              borderRadius: 24,
-              padding: "26px 30px",
-              textAlign: "center",
-              fontSize: 40,
-              fontWeight: 900,
-              boxShadow: "0 16px 36px rgba(0,0,0,0.55)",
-            }}
-          >
-            {scene.ctaText || "¿TÚ QUÉ OPINAS? COMENTA ↓"}
-          </div>
-        </div>
-      </>
-    ) : null,
+                  boxShadow: "0 12px 30px rgba(0,0,0,0.6)",
+                },
+              },
+              "VS"
+            ),
+            h(
+              "div",
+              {
+                style: {
+                  flex: 1,
+                  background: `linear-gradient(135deg, ${theme.secondaryColor}E6, rgba(7,17,31,0.9))`,
+                  borderBottom: "6px solid #FFFFFF",
+                  borderRadius: 20,
+                  padding: "22px 24px",
+                  textAlign: "right",
+                },
+              },
+              h(
+                "div",
+                { style: { fontSize: 30, fontWeight: 900, textTransform: "uppercase" } },
+                scene.rightLabel || "B"
+              ),
+              typeof scene.rightValue === "number"
+                ? h(
+                    "div",
+                    { style: { fontSize: 52, fontWeight: 900, color: "#FFFFFF" } },
+                    Math.round(rightAnim)
+                  )
+                : null
+            )
+          )
+        )
+      : null,
+    layout === "stat-overlay"
+      ? h(
+          React.Fragment,
+          null,
+          h(
+            "div",
+            { style: { position: "absolute", top: 82, left: 52, right: isHybrid ? 150 : 52 } },
+            h(
+              "div",
+              {
+                style: {
+                  color: theme.accentColor,
+                  fontSize: 26,
+                  fontWeight: 900,
+                  letterSpacing: 4,
+                  textShadow: "0 4px 16px rgba(0,0,0,0.9)",
+                },
+              },
+              scene.badge
+            ),
+            h(
+              "h2",
+              {
+                style: {
+                  margin: "10px 0 0 0",
+                  fontSize: 64,
+                  fontWeight: 900,
+                  lineHeight: 1.05,
+                  textShadow: "0 8px 26px rgba(0,0,0,0.9)",
+                },
+              },
+              scene.title
+            )
+          ),
+          h(
+            "div",
+            {
+              style: {
+                position: "absolute",
+                bottom: isEditorial ? 560 : 360,
+                left: 52,
+                right: 52,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                opacity: detailSpring,
+                transform: `scale(${interpolate(detailSpring, [0, 1], [0.75, 1])})`,
+              },
+            },
+            isEditorial
+              ? h(
+                  "div",
+                  {
+                    style: {
+                      marginBottom: 24,
+                      width: 120,
+                      height: 120,
+                      borderRadius: 34,
+                      backgroundColor: `${theme.accentColor}22`,
+                      border: `4px solid ${theme.accentColor}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    },
+                  },
+                  h(IconComp, { size: 64, color: theme.accentColor, strokeWidth: 2.3 })
+                )
+              : null,
+            h(
+              "div",
+              {
+                style: {
+                  fontSize: 152,
+                  fontWeight: 900,
+                  lineHeight: 0.95,
+                  color: theme.accentColor,
+                  textShadow: "0 14px 40px rgba(0,0,0,0.95)",
+                  letterSpacing: -4,
+                },
+              },
+              scene.highlightValue || "100%"
+            ),
+            scene.stampText
+              ? h(
+                  "div",
+                  {
+                    style: {
+                      marginTop: 14,
+                      padding: "10px 30px",
+                      borderRadius: 12,
+                      backgroundColor: theme.secondaryColor,
+                      color: "#FFFFFF",
+                      fontSize: 34,
+                      fontWeight: 900,
+                      letterSpacing: 4,
+                      transform: "rotate(-2.5deg)",
+                      boxShadow: "0 14px 32px rgba(0,0,0,0.55)",
+                    },
+                  },
+                  scene.stampText
+                )
+              : null
+          )
+        )
+      : null,
+    layout === "quote-press"
+      ? h(
+          React.Fragment,
+          null,
+          h(
+            "div",
+            { style: { position: "absolute", top: 82, left: 52, right: isHybrid ? 150 : 52 } },
+            h(
+              "div",
+              {
+                style: {
+                  display: "inline-block",
+                  padding: "8px 22px",
+                  borderRadius: 8,
+                  backgroundColor: "#DC2626",
+                  color: "#FFFFFF",
+                  fontSize: 24,
+                  fontWeight: 900,
+                  letterSpacing: 3,
+                  marginBottom: 16,
+                },
+              },
+              scene.badge || "CLAVE"
+            ),
+            h(
+              "h2",
+              {
+                style: {
+                  margin: 0,
+                  fontSize: 64,
+                  fontWeight: 900,
+                  lineHeight: 1.04,
+                  textShadow: "0 8px 28px rgba(0,0,0,0.9)",
+                },
+              },
+              scene.title
+            )
+          ),
+          scene.quoteText
+            ? h(
+                "div",
+                {
+                  style: {
+                    position: "absolute",
+                    bottom: 350,
+                    left: 52,
+                    right: 52,
+                    backgroundColor: "rgba(7, 17, 31, 0.86)",
+                    borderLeft: `10px solid ${theme.accentColor}`,
+                    borderRadius: 20,
+                    padding: "26px 32px",
+                    fontSize: 36,
+                    fontWeight: 800,
+                    lineHeight: 1.25,
+                    boxShadow: "0 18px 40px rgba(0,0,0,0.6)",
+                    opacity: detailSpring,
+                    transform: `translateX(${interpolate(detailSpring, [0, 1], [-45, 0])}px)`,
+                  },
+                },
+                `“${scene.quoteText}”`
+              )
+            : null
+        )
+      : null,
+    layout === "cta-engage"
+      ? h(
+          React.Fragment,
+          null,
+          h(
+            "div",
+            {
+              style: {
+                position: "absolute",
+                top: 90,
+                left: 52,
+                right: 52,
+                textAlign: "center",
+              },
+            },
+            h(
+              "div",
+              {
+                style: {
+                  color: theme.accentColor,
+                  fontSize: 26,
+                  fontWeight: 900,
+                  letterSpacing: 4,
+                  marginBottom: 14,
+                },
+              },
+              scene.badge
+            ),
+            h(
+              "h2",
+              {
+                style: {
+                  margin: 0,
+                  fontSize: 70,
+                  fontWeight: 900,
+                  lineHeight: 1.04,
+                  textShadow: "0 10px 30px rgba(0,0,0,0.9)",
+                },
+              },
+              scene.title
+            )
+          ),
+          h(
+            "div",
+            {
+              style: {
+                position: "absolute",
+                bottom: 350,
+                left: 52,
+                right: 52,
+                display: "flex",
+                flexDirection: "column",
+                gap: 18,
+                opacity: detailSpring,
+                transform: `translateY(${interpolate(detailSpring, [0, 1], [28, 0])}px)`,
+              },
+            },
+            (scene.bullets || []).slice(0, 2).map((b, i) =>
+              h(
+                "div",
+                {
+                  key: i,
+                  style: {
+                    backgroundColor: "rgba(7, 17, 31, 0.82)",
+                    border: `3px solid ${i === 0 ? theme.accentColor : "rgba(255,255,255,0.4)"}`,
+                    borderRadius: 22,
+                    padding: "22px 28px",
+                    fontSize: 34,
+                    fontWeight: 800,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 18,
+                  },
+                },
+                h(
+                  "span",
+                  {
+                    style: {
+                      minWidth: 48,
+                      height: 48,
+                      borderRadius: 12,
+                      backgroundColor: theme.accentColor,
+                      color: "#07111F",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 900,
+                    },
+                  },
+                  i + 1
+                ),
+                h("span", null, b)
+              )
+            ),
+            h(
+              "div",
+              {
+                style: {
+                  backgroundColor: theme.accentColor,
+                  color: "#07111F",
+                  borderRadius: 24,
+                  padding: "26px 30px",
+                  textAlign: "center",
+                  fontSize: 40,
+                  fontWeight: 900,
+                  boxShadow: "0 16px 36px rgba(0,0,0,0.55)",
+                },
+              },
+              scene.ctaText || "¿TÚ QUÉ OPINAS? COMENTA ↓"
+            )
+          )
+        )
+      : null,
+    showMidCallout ? h(MidSceneCallout, { scene, theme, isEditorial }) : null,
     h(SceneSubtitle, {
       scene,
       accent: theme.accentColor,
@@ -1060,62 +1664,70 @@ const SceneTactics: React.FC<SceneCommonProps> = ({
         alignItems: "center",
       },
     },
-    <div style={{ fontSize: 26, fontWeight: 800, color: theme.accentColor, letterSpacing: 4 }}>
-      {scene.badge}
-    </div>,
-    <h2 style={{ fontSize: 58, fontWeight: 900, textAlign: "center", margin: "12px 0 34px 0" }}>
-      {scene.title}
-    </h2>,
-    <svg
-      viewBox="0 0 900 840"
-      style={{
-        width: 940,
-        height: 880,
-        borderRadius: 32,
-        backgroundColor: "#0E2D22",
-        border: "4px solid rgba(255,255,255,0.16)",
-      }}
-    >
-      <rect x="40" y="40" width="820" height="760" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="4" />
-      <rect x="210" y="40" width="480" height="220" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="4" />
-      <rect x="330" y="40" width="240" height="86" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="4" />
-      <rect x="385" y="18" width="130" height="22" fill="rgba(255,255,255,0.22)" stroke="#FFFFFF" strokeWidth="3" />
-
-      <line x1={p6X} y1={p6Y} x2={p8X} y2={p8Y} stroke="#60A5FA" strokeWidth="6" strokeDasharray="260" strokeDashoffset={pass1} />
-      <line x1={p8X} y1={p8Y} x2={p19X} y2={p19Y} stroke={theme.accentColor} strokeWidth="7" strokeDasharray="340" strokeDashoffset={pass2} />
-      <line x1={p19X} y1={p19Y} x2={465} y2={95} stroke="#F43F5E" strokeWidth="8" strokeDasharray="240" strokeDashoffset={shot} />
-
-      {defenders.map((d, i) => (
-        <circle key={i} cx={d.x} cy={d.y} r="27" fill="#E2E8F0" stroke="#0F172A" strokeWidth="4" />
-      ))}
-
-      {attackers.map((pItem) => (
-        <g key={pItem.label}>
-          <circle cx={pItem.x} cy={pItem.y} r="34" fill={theme.primaryColor} stroke={theme.secondaryColor} strokeWidth="6" />
-          <text x={pItem.x} y={pItem.y + 10} textAnchor="middle" fill="#FFFFFF" fontSize="27" fontWeight="900">
-            {pItem.label}
-          </text>
-        </g>
-      ))}
-
-      <circle cx={ballX} cy={ballY} r="14" fill="#FFFFFF" stroke="#0F172A" strokeWidth="3" />
-    </svg>,
-    scene.tacticCaption ? (
-      <div
-        style={{
-          marginTop: 28,
-          width: "100%",
-          backgroundColor: "rgba(255,255,255,0.06)",
-          borderLeft: `8px solid ${theme.secondaryColor}`,
-          borderRadius: 18,
-          padding: "22px 28px",
-          fontSize: 32,
-          fontWeight: 700,
-        }}
-      >
-        {scene.tacticCaption}
-      </div>
-    ) : null,
+    h(
+      "div",
+      { style: { fontSize: 26, fontWeight: 800, color: theme.accentColor, letterSpacing: 4 } },
+      scene.badge
+    ),
+    h(
+      "h2",
+      { style: { fontSize: 58, fontWeight: 900, textAlign: "center", margin: "12px 0 34px 0" } },
+      scene.title
+    ),
+    h(
+      "svg",
+      {
+        viewBox: "0 0 900 840",
+        style: {
+          width: 940,
+          height: 880,
+          borderRadius: 32,
+          backgroundColor: "#0E2D22",
+          border: "4px solid rgba(255,255,255,0.16)",
+        },
+      },
+      h("rect", { x: 40, y: 40, width: 820, height: 760, fill: "none", stroke: "rgba(255,255,255,0.28)", strokeWidth: 4 }),
+      h("rect", { x: 210, y: 40, width: 480, height: 220, fill: "none", stroke: "rgba(255,255,255,0.28)", strokeWidth: 4 }),
+      h("rect", { x: 330, y: 40, width: 240, height: 86, fill: "none", stroke: "rgba(255,255,255,0.28)", strokeWidth: 4 }),
+      h("rect", { x: 385, y: 18, width: 130, height: 22, fill: "rgba(255,255,255,0.22)", stroke: "#FFFFFF", strokeWidth: 3 }),
+      h("line", { x1: p6X, y1: p6Y, x2: p8X, y2: p8Y, stroke: "#60A5FA", strokeWidth: 6, strokeDasharray: "260", strokeDashoffset: pass1 }),
+      h("line", { x1: p8X, y1: p8Y, x2: p19X, y2: p19Y, stroke: theme.accentColor, strokeWidth: 7, strokeDasharray: "340", strokeDashoffset: pass2 }),
+      h("line", { x1: p19X, y1: p19Y, x2: 465, y2: 95, stroke: "#F43F5E", strokeWidth: 8, strokeDasharray: "240", strokeDashoffset: shot }),
+      defenders.map((d, i) =>
+        h("circle", { key: i, cx: d.x, cy: d.y, r: 27, fill: "#E2E8F0", stroke: "#0F172A", strokeWidth: 4 })
+      ),
+      attackers.map((pItem) =>
+        h(
+          "g",
+          { key: pItem.label },
+          h("circle", { cx: pItem.x, cy: pItem.y, r: 34, fill: theme.primaryColor, stroke: theme.secondaryColor, strokeWidth: 6 }),
+          h(
+            "text",
+            { x: pItem.x, y: pItem.y + 10, textAnchor: "middle", fill: "#FFFFFF", fontSize: 27, fontWeight: 900 },
+            pItem.label
+          )
+        )
+      ),
+      h("circle", { cx: ballX, cy: ballY, r: 14, fill: "#FFFFFF", stroke: "#0F172A", strokeWidth: 3 })
+    ),
+    scene.tacticCaption
+      ? h(
+          "div",
+          {
+            style: {
+              marginTop: 28,
+              width: "100%",
+              backgroundColor: "rgba(255,255,255,0.06)",
+              borderLeft: `8px solid ${theme.secondaryColor}`,
+              borderRadius: 18,
+              padding: "22px 28px",
+              fontSize: 32,
+              fontWeight: 700,
+            },
+          },
+          scene.tacticCaption
+        )
+      : null,
     h(SceneSubtitle, {
       scene,
       accent: theme.accentColor,
@@ -1124,6 +1736,16 @@ const SceneTactics: React.FC<SceneCommonProps> = ({
     })
   );
 };
+
+function getTransitionPresentation(type: TransitionType | undefined, idx: number): any {
+  const cycle: TransitionType[] = ["slide-left", "wipe", "slide-up", "fade", "flip"];
+  const chosen = type || cycle[idx % cycle.length];
+  if (chosen === "slide-left") return slide({ direction: "from-right" });
+  if (chosen === "slide-up") return slide({ direction: "from-bottom" });
+  if (chosen === "wipe") return wipe({ direction: "from-left" });
+  if (chosen === "flip") return flip({ direction: "from-right" });
+  return fade();
+}
 
 export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) => {
   const { fps } = useVideoConfig();
@@ -1135,59 +1757,80 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
   };
   const voiceSpeed = spec.voiceSpeed || 1;
   const subtitleStyle: SubtitleStyle = spec.subtitleStyle || "dynamic";
+  const renderMode: RenderMode = spec.renderMode || "hybrid";
+  const sfxEnabled = spec.sfxEnabled !== false;
   const resolvedGlobalAudio = resolveMediaSrc(audioUrl);
 
-  let cursor = 0;
+  const seriesChildren: React.ReactNode[] = [];
+
+  spec.scenes.forEach((scene, index) => {
+    const durationInFrames = getSceneFrames(scene, fps);
+    const resolvedSceneAudio = resolveMediaSrc(scene.audioUrl);
+
+    const audioNode =
+      !resolvedGlobalAudio && resolvedSceneAudio
+        ? h(
+            Sequence,
+            { from: SCENE_LEAD_IN_FRAMES },
+            h(Audio, { src: resolvedSceneAudio, playbackRate: voiceSpeed })
+          )
+        : null;
+
+    const whooshNode =
+      sfxEnabled && index > 0
+        ? h(
+            Sequence,
+            { from: 0, durationInFrames: 14 },
+            h(Audio, { src: staticFile("sfx/whoosh.wav"), volume: 0.22 })
+          )
+        : null;
+
+    const sceneNode =
+      scene.type === "tactics"
+        ? h(SceneTactics, {
+            scene,
+            theme,
+            voiceSpeed,
+            subtitleStyle,
+            sceneIndex: index,
+            renderMode,
+            sfxEnabled,
+          })
+        : h(SceneDynamic, {
+            scene,
+            theme,
+            voiceSpeed,
+            subtitleStyle,
+            sceneIndex: index,
+            renderMode,
+            sfxEnabled,
+          });
+
+    seriesChildren.push(
+      h(
+        TSSeq,
+        { key: `seq-${scene.id || index}`, durationInFrames },
+        audioNode,
+        whooshNode,
+        sceneNode
+      )
+    );
+
+    if (index < spec.scenes.length - 1) {
+      seriesChildren.push(
+        h(TSTrans, {
+          key: `trans-${scene.id || index}`,
+          presentation: getTransitionPresentation(scene.transition, index),
+          timing: linearTiming({ durationInFrames: TRANSITION_FRAMES }),
+        })
+      );
+    }
+  });
 
   return h(
     AbsoluteFill,
     { style: { backgroundColor: theme.bgColor } },
     resolvedGlobalAudio ? h(Audio, { src: resolvedGlobalAudio }) : null,
-    spec.scenes.map((scene, index) => {
-      const durationInFrames = Math.max(
-        30,
-        Math.ceil((scene.durationSeconds || 5) * fps)
-      );
-      const from = cursor;
-      cursor += durationInFrames;
-      const resolvedSceneAudio = resolveMediaSrc(scene.audioUrl);
-
-      const audioNode =
-        !resolvedGlobalAudio && resolvedSceneAudio
-          ? h(
-              Sequence,
-              { from: SCENE_LEAD_IN_FRAMES },
-              h(Audio, { src: resolvedSceneAudio, playbackRate: voiceSpeed })
-            )
-          : null;
-
-      const sceneNode =
-        scene.type === "tactics"
-          ? h(SceneTactics, {
-              scene,
-              theme,
-              voiceSpeed,
-              subtitleStyle,
-              sceneIndex: index,
-            })
-          : h(SceneCinematic, {
-              scene,
-              theme,
-              voiceSpeed,
-              subtitleStyle,
-              sceneIndex: index,
-            });
-
-      return h(
-        Sequence,
-        {
-          key: scene.id || index,
-          from,
-          durationInFrames,
-        },
-        audioNode,
-        h(SceneTransition, { isFirst: index === 0 }, sceneNode)
-      );
-    })
+    h(TS, null, ...seriesChildren)
   );
 };

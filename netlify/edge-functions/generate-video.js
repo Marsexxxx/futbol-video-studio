@@ -3,6 +3,9 @@ const getEnv = (key) =>
   (typeof Deno !== "undefined" && Deno.env?.get(key)) ||
   "";
 
+const GEMINI_API_BASE =
+  "https" + "://generativelanguage.googleapis.com/v1beta/models";
+
 function clampDuration(sec) {
   return Math.min(180, Math.max(10, Math.round(sec)));
 }
@@ -106,7 +109,7 @@ function normalizeSceneDurations(scenes, targetSeconds) {
 async function requestModel(model, apiKey, payload, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
 
   try {
     const response = await fetch(url, {
@@ -148,6 +151,16 @@ const TOPIC_HINTS = {
   cinema: "Enfoque de cine, cultura pop, videojuegos o entretenimiento con iluminación dramática de película.",
 };
 
+const RENDER_MODE_HINTS = {
+  hybrid: `MODO HÍBRIDO (OBLIGATORIO MEZCLAR):
+- Alterna inteligentemente "sceneMode" entre "hybrid" (imagen visual + ícono dinámico + etiqueta flotante) y "editorial" (motion graphics puro con ícono grande animado, cuadrícula viva y tarjetas editoriales sin foto de fondo).
+- Usa "sceneMode": "editorial" en al menos 2 escenas clave (por ejemplo datos, documentos, explicaciones, comparativas o polémicas) y "hybrid" en las escenas de impacto o narrativa visual.`,
+  editorial: `MODO EDITORIAL / MOTION GRAPHICS:
+- Usa "sceneMode": "editorial" en TODAS las escenas para lograr una estética limpia de motion graphics estilo Vox/Johnny Harris con íconos dinámicos, formas animadas y tarjetas editoriales.`,
+  cinematic: `MODO CINEMATOGRÁFICO:
+- Usa "sceneMode": "cinematic" en TODAS las escenas con visuales a pantalla completa y movimientos de cámara dinámicos.`,
+};
+
 export default async (req) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
@@ -170,12 +183,13 @@ export default async (req) => {
       durationSeconds = 35,
       voiceSpeed = 1.0,
       topicMode = "auto",
+      renderMode = "hybrid",
     } = await req.json();
 
     const effectiveDuration = extractRequestedDuration(prompt, durationSeconds);
     const sceneCount = getTargetSceneCount(effectiveDuration);
     const speed = Math.min(1.5, Math.max(0.85, Number(voiceSpeed) || 1.0));
-    const speechBudgetSec = Math.max(6, effectiveDuration - sceneCount * 0.95);
+    const speechBudgetSec = Math.max(6, effectiveDuration - sceneCount * 0.9);
     const targetTotalWords = Math.max(18, Math.round(speechBudgetSec * 2.55 * speed));
     const avgWordsPerScene = Math.max(6, Math.round(targetTotalWords / sceneCount));
     const minWordsPerScene = Math.max(5, Math.round(avgWordsPerScene * 0.8));
@@ -192,9 +206,11 @@ export default async (req) => {
 
     const models = [...new Set([primaryModel, ...fallbackList])];
     const topicHint = TOPIC_HINTS[topicMode] || TOPIC_HINTS.auto;
+    const modeHint = RENDER_MODE_HINTS[renderMode] || RENDER_MODE_HINTS.hybrid;
 
-    const systemInstruction = `Eres director creativo, guionista y director de fotografía de videos verticales 9:16 virales en español sobre CUALQUIER temática (TikTok / Reels / YouTube Shorts).
+    const systemInstruction = `Eres director creativo, guionista y director de motion graphics para videos verticales 9:16 virales en español sobre CUALQUIER temática (TikTok / Reels / YouTube Shorts).
 ${topicHint}
+${modeHint}
 
 Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
 {
@@ -209,13 +225,17 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
     {
       "id": "s1",
       "type": "cinematic" | "tactics",
+      "sceneMode": "hybrid" | "editorial" | "cinematic",
       "layout": "hero-impact" | "story-clean" | "split-versus" | "stat-overlay" | "quote-press" | "cta-engage",
       "cameraMotion": "impact-punch" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right",
+      "transition": "slide-left" | "slide-up" | "wipe" | "fade" | "flip",
+      "iconName": "trophy" | "file-text" | "scale" | "banknote" | "gavel" | "shield" | "flame" | "zap" | "clock" | "globe" | "brain" | "rocket" | "alert" | "megaphone" | "target" | "trending-up" | "lock" | "eye" | "users" | "crown" | "swords" | "sparkles" | "newspaper" | "briefcase" | "landmark" | "cpu" | "heart" | "compass" | "award" | "radio" | "flag",
+      "calloutText": "Dato o golpe visual corto de 2 a 4 palabras que aparece a mitad de escena",
       "durationSeconds": ${avgSecPerScene},
       "badge": "ETIQUETA BREVE",
       "title": "TITULAR CON IMPACTO",
       "subtitle": "Locución natural en español ajustada exactamente al límite de palabras.",
-      "imagePrompt": "Detailed ENGLISH visual prompt describing a realistic full-bleed vertical 9:16 scene matching the exact topic, people/subjects, setting, lighting, and camera angle. Strictly NO text, NO borders.",
+      "imagePrompt": "Detailed ENGLISH visual prompt describing a vertical 9:16 scene matching the exact topic, people/subjects, setting, lighting, and camera angle. Strictly NO text, NO borders.",
       "fallbackImagePrompt": "Alternative ENGLISH visual prompt describing the same scene in dramatic editorial style with zero text.",
       "highlightValue": "Dato corto si aplica",
       "stampText": "CLAVE",
@@ -234,19 +254,15 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
 REGLAS ESTRICTAS DE DURACIÓN (CRÍTICO):
 1. Duración objetivo EXACTA: ${effectiveDuration} segundos.
 2. Genera EXACTAMENTE ${sceneCount} escenas cuya suma de "durationSeconds" sea ${effectiveDuration} segundos.
-3. Para que la voz narrada dure ${effectiveDuration} segundos reales, el campo "subtitle" de CADA escena debe tener entre ${minWordsPerScene} y ${maxWordsPerScene} palabras (total aproximado de ${targetTotalWords} palabras entre todas las escenas). NO escribas textos demasiado cortos si el video es largo, ni demasiado largos si el video es corto.
+3. Para que la voz narrada dure ${effectiveDuration} segundos reales, el campo "subtitle" de CADA escena debe tener entre ${minWordsPerScene} y ${maxWordsPerScene} palabras (total aproximado de ${targetTotalWords} palabras entre todas las escenas).
 
-REGLAS DE COHERENCIA VISUAL Y TEMÁTICA:
-4. Usa "type": "cinematic" en todas las escenas. Usa "type": "tactics" ÚNICAMENTE si el usuario pide explicar explícitamente una jugada táctica deportiva en pizarra.
-5. Adapta "theme" a la paleta cromática real del tema (dorado/oscuro para misterio o historia, cian/índigo para tecnología o ciencia, verde/pizarra para finanzas, rojo/ámbar para cocina o drama, blaugrana solo si el tema es del FC Barcelona).
-6. Varía "layout" y "cameraMotion" entre escenas consecutivas para que cada video tenga ritmo único:
-   - "hero-impact": apertura potente o punto culminante.
-   - "story-clean": escena narrativa cinematográfica limpia para que luzca la imagen.
-   - "split-versus": SOLO cuando el tema compara o enfrenta dos conceptos, personas, productos o equipos.
-   - "stat-overlay": SOLO cuando hay una cifra, año, precio o dato clave real.
-   - "quote-press": ideal para noticias, frases célebres, polémicas o investigaciones.
-   - "cta-engage": cierre con pregunta o invitación acorde al tema (incluye "ctaText").
-7. "imagePrompt" SIEMPRE en inglés, muy específico al tema pedido, con encuadre vertical 9:16 limpio y espacio arriba/abajo para títulos y subtítulos, SIN texto ni marcos dentro de la imagen.`;
+REGLAS DE DINAMISMO VISUAL Y COHERENCIA:
+4. Usa "type": "cinematic" en casi todas las escenas. Usa "type": "tactics" ÚNICAMENTE si el usuario pide explicar explícitamente una jugada táctica deportiva en pizarra.
+5. Elige un "iconName" específico y coherente en CADA escena (ej. "file-text" o "gavel" para contratos/juicios, "banknote" para dinero/fichajes, "swords" para duelos, "globe" o "compass" para países, "clock" para historia, "brain" o "cpu" para ciencia/IA, "alert" para misterios, "trophy" o "crown" para victorias).
+6. Escribe un "calloutText" breve y llamativo (2 a 4 palabras, ej. "CLÁUSULA: 60M €", "AÑO 2000", "360,000 BÚNKERES") que refuerce lo que dice la voz a mitad de cada escena.
+7. Varía "layout", "cameraMotion" y "transition" entre escenas consecutivas para que el video tenga ritmo real.
+8. Adapta "theme" a la paleta cromática real del tema.
+9. "imagePrompt" SIEMPRE en inglés, muy específico, encuadre vertical 9:16 limpio con espacio arriba y abajo para títulos/subtítulos, SIN texto ni marcos dentro de la imagen.`;
 
     const buildPayload = (disableThinking) => ({
       system_instruction: { parts: [{ text: systemInstruction }] },
@@ -325,7 +341,18 @@ REGLAS DE COHERENCIA VISUAL Y TEMÁTICA:
 
     const videoSpec = JSON.parse(cleaned);
     videoSpec.targetDuration = effectiveDuration;
-    videoSpec.scenes = normalizeSceneDurations(videoSpec.scenes, effectiveDuration);
+    videoSpec.renderMode = renderMode;
+    videoSpec.scenes = normalizeSceneDurations(videoSpec.scenes, effectiveDuration).map(
+      (scene, idx) => ({
+        ...scene,
+        sceneMode:
+          renderMode === "editorial"
+            ? "editorial"
+            : renderMode === "cinematic"
+            ? "cinematic"
+            : scene.sceneMode || (idx % 2 === 1 ? "editorial" : "hybrid"),
+      })
+    );
 
     return new Response(JSON.stringify(videoSpec), {
       status: 200,

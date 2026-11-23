@@ -4,17 +4,18 @@ import path from "node:path";
 const token = process.env.GITHUB_TOKEN;
 const repo = process.env.GITHUB_REPOSITORY;
 const assetId = process.env.ASSET_ID;
+const GH_API = "https" + "://api.github.com";
 
 if (!token || !repo || !assetId) {
   throw new Error("Faltan variables GITHUB_TOKEN, GITHUB_REPOSITORY o ASSET_ID.");
 }
 
-const apiUrl = `https://api.github.com/repos/${repo}/releases/assets/${assetId}`;
+const apiUrl = `${GH_API}/repos/${repo}/releases/assets/${assetId}`;
 const initialRes = await fetch(apiUrl, {
   headers: {
     Authorization: `Bearer ${token}`,
     Accept: "application/octet-stream",
-    "User-Agent": "barca-video-studio",
+    "User-Agent": "video-studio-ai",
   },
   redirect: "manual",
 });
@@ -55,6 +56,11 @@ const mappedScenes = (spec.scenes || []).map((scene) => {
     next.imageUrl = keyToRelPath[next.imageAssetKey];
   } else if (next.imageUrl && next.imageUrl.startsWith("blob:")) {
     delete next.imageUrl;
+  }
+  if (next.videoAssetKey && keyToRelPath[next.videoAssetKey]) {
+    next.videoUrl = keyToRelPath[next.videoAssetKey];
+  } else if (next.videoUrl && next.videoUrl.startsWith("blob:")) {
+    delete next.videoUrl;
   }
   return next;
 });

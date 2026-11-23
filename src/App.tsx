@@ -10,19 +10,28 @@ import {
   Image as ImageIcon,
   Mic,
   Volume2,
+  VolumeX,
   Loader2,
   CheckCircle2,
   ExternalLink,
   Wand2,
+  Video as VideoIcon,
+  Layers,
 } from "lucide-react";
-import { DynamicVideo, SCENE_LEAD_IN_FRAMES } from "./remotion/DynamicVideo";
+import {
+  DynamicVideo,
+  getTotalFrames,
+  SCENE_LEAD_IN_FRAMES,
+} from "./remotion/DynamicVideo";
 import { DEFAULT_VIDEO_SPEC } from "./defaultVideo";
 import {
   CameraMotion,
+  RenderMode,
   SceneLayout,
   SceneType,
   SubtitleStyle,
   TopicMode,
+  TransitionType,
   VideoScene,
   VideoSpec,
   VisualStyle,
@@ -37,6 +46,12 @@ const DEFAULT_TAIL_PAUSE_SEC = 0.75;
 const MIN_TAIL_PAUSE_SEC = 0.4;
 
 const DURATION_PRESETS = [15, 30, 45, 60, 90];
+
+const RENDER_MODE_OPTIONS: { id: RenderMode; label: string }[] = [
+  { id: "hybrid", label: "Formato: Híbrido (Imágenes/Videos + Íconos dinámicos)" },
+  { id: "editorial", label: "Formato: Editorial (Íconos dinámicos + Motion Graphics)" },
+  { id: "cinematic", label: "Formato: Cinematográfico (Pantalla completa)" },
+];
 
 const TOPIC_OPTIONS: { id: TopicMode; label: string }[] = [
   { id: "auto", label: "Temática: Automática (Cualquier tema)" },
@@ -71,6 +86,7 @@ const STYLE_OPTIONS = [
 ];
 
 const VISUAL_STYLE_OPTIONS: { id: VisualStyle; label: string }[] = [
+  { id: "editorial", label: "Visual: Ilustración Editorial / Recorte (Sin aspecto IA)" },
   { id: "photoreal", label: "Visual: Fotorrealista cinematográfico" },
   { id: "hyperart", label: "Visual: Arte conceptual hiperrealista" },
   { id: "editorial3d", label: "Visual: 3D Cinematográfico" },
@@ -83,6 +99,45 @@ const SPEED_OPTIONS = [
   { value: 1.1, label: "1.1x Ágil" },
   { value: 1.2, label: "1.2x Rápida" },
   { value: 1.3, label: "1.3x Muy rápida" },
+];
+
+const ICON_OPTIONS = [
+  { id: "sparkles", label: "Ícono: Destello" },
+  { id: "trophy", label: "Ícono: Trofeo" },
+  { id: "crown", label: "Ícono: Corona" },
+  { id: "swords", label: "Ícono: Duelo / VS" },
+  { id: "file-text", label: "Ícono: Documento / Contrato" },
+  { id: "gavel", label: "Ícono: Juicio / Ley" },
+  { id: "scale", label: "Ícono: Balanza / Justicia" },
+  { id: "banknote", label: "Ícono: Dinero / Millones" },
+  { id: "newspaper", label: "Ícono: Prensa / Noticia" },
+  { id: "megaphone", label: "Ícono: Polémica / Anuncio" },
+  { id: "alert", label: "Ícono: Alerta / Misterio" },
+  { id: "clock", label: "Ícono: Tiempo / Historia" },
+  { id: "globe", label: "Ícono: Mundo / País" },
+  { id: "compass", label: "Ícono: Mapa / Exploración" },
+  { id: "brain", label: "Ícono: Mente / Estrategia" },
+  { id: "cpu", label: "Ícono: Tecnología / IA" },
+  { id: "rocket", label: "Ícono: Espacio / Despegue" },
+  { id: "flame", label: "Ícono: Fuego / Épico" },
+  { id: "zap", label: "Ícono: Impacto / Rayo" },
+  { id: "trending-up", label: "Ícono: Crecimiento / Récord" },
+  { id: "shield", label: "Ícono: Defensa / Escudo" },
+  { id: "target", label: "Ícono: Objetivo / Precisión" },
+  { id: "lock", label: "Ícono: Secreto / Confidencial" },
+  { id: "eye", label: "Ícono: Secreto revelado" },
+  { id: "users", label: "Ícono: Afición / Personas" },
+  { id: "briefcase", label: "Ícono: Despacho / Negocio" },
+  { id: "landmark", label: "Ícono: Institución / Estadio" },
+  { id: "flag", label: "Ícono: Meta / Bandera" },
+];
+
+const TRANSITION_OPTIONS: { id: TransitionType; label: string }[] = [
+  { id: "slide-left", label: "Trans: Deslizar →" },
+  { id: "slide-up", label: "Trans: Subir ↑" },
+  { id: "wipe", label: "Trans: Barrido" },
+  { id: "flip", label: "Trans: Volteo 3D" },
+  { id: "fade", label: "Trans: Fundido" },
 ];
 
 type GenerateResponse = Partial<VideoSpec> & {
@@ -270,7 +325,10 @@ function mimeToExt(mime: string, fallback: string): string {
   if (lower.includes("wav")) return "wav";
   if (lower.includes("mpeg") || lower.includes("mp3")) return "mp3";
   if (lower.includes("ogg")) return "ogg";
-  if (lower.includes("mp4") || lower.includes("m4a")) return "m4a";
+  if (lower.includes("m4a")) return "m4a";
+  if (lower.includes("webm")) return "webm";
+  if (lower.includes("quicktime") || lower.includes("mov")) return "mov";
+  if (lower.includes("mp4")) return "mp4";
   if (lower.includes("png")) return "png";
   if (lower.includes("webp")) return "webp";
   if (lower.includes("jpeg") || lower.includes("jpg")) return "jpg";
@@ -280,13 +338,14 @@ function mimeToExt(mime: string, fallback: string): string {
 async function blobUrlToAsset(
   url: string,
   fallbackExt: string
-): Promise<{ base64: string; ext: string }> {
+): Promise<{ base64: string; ext: string; byteSize: number }> {
   const res = await fetch(url);
   const blob = await res.blob();
   const buffer = await blob.arrayBuffer();
   return {
     base64: bytesToBase64(new Uint8Array(buffer)),
     ext: mimeToExt(blob.type, fallbackExt),
+    byteSize: buffer.byteLength,
   };
 }
 
@@ -489,11 +548,15 @@ export function App() {
     ...DEFAULT_VIDEO_SPEC,
     voiceSpeed: 1.0,
     subtitleStyle: "dynamic",
+    renderMode: "hybrid",
+    sfxEnabled: true,
     targetDuration: 35,
   });
   const [prompt, setPrompt] = useState("");
   const [targetDurationInput, setTargetDurationInput] = useState("35");
   const [topicMode, setTopicMode] = useState<TopicMode>("auto");
+  const [renderMode, setRenderMode] = useState<RenderMode>("hybrid");
+  const [sfxEnabled, setSfxEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -503,7 +566,7 @@ export function App() {
   const [voiceStyle, setVoiceStyle] = useState("tiktok");
   const [voiceSpeed, setVoiceSpeed] = useState(1.0);
   const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>("dynamic");
-  const [visualStyle, setVisualStyle] = useState<VisualStyle>("photoreal");
+  const [visualStyle, setVisualStyle] = useState<VisualStyle>("editorial");
   const [autoVoice, setAutoVoice] = useState(true);
   const [autoImages, setAutoImages] = useState(true);
 
@@ -534,15 +597,7 @@ export function App() {
     return Number.isFinite(n) && n > 0 ? clampDuration(n) : 35;
   }, [targetDurationInput]);
 
-  const totalFrames = useMemo(() => {
-    const frames = spec.scenes.reduce(
-      (acc, scene) =>
-        acc + Math.max(30, Math.ceil((scene.durationSeconds || 5) * FPS)),
-      0
-    );
-    return Math.max(30, frames);
-  }, [spec]);
-
+  const totalFrames = useMemo(() => getTotalFrames(spec, FPS), [spec]);
   const totalSeconds = (totalFrames / FPS).toFixed(1);
 
   const syncedScenesCount = useMemo(
@@ -550,8 +605,8 @@ export function App() {
     [spec]
   );
 
-  const imagesReadyCount = useMemo(
-    () => spec.scenes.filter((s) => Boolean(s.imageUrl)).length,
+  const mediaReadyCount = useMemo(
+    () => spec.scenes.filter((s) => Boolean(s.imageUrl || s.videoUrl)).length,
     [spec]
   );
 
@@ -565,6 +620,30 @@ export function App() {
         .replace(/^-|-$/g, "") || "video-ai",
     [spec.title]
   );
+
+  const handleRenderModeChange = (nextMode: RenderMode) => {
+    setRenderMode(nextMode);
+    setSpec((prev) => ({
+      ...prev,
+      renderMode: nextMode,
+      scenes: prev.scenes.map((scene, idx) => ({
+        ...scene,
+        sceneMode:
+          nextMode === "editorial"
+            ? "editorial"
+            : nextMode === "cinematic"
+            ? "cinematic"
+            : idx % 2 === 1
+            ? "editorial"
+            : "hybrid",
+      })),
+    }));
+  };
+
+  const handleSfxToggle = (enabled: boolean) => {
+    setSfxEnabled(enabled);
+    setSpec((prev) => ({ ...prev, sfxEnabled: enabled }));
+  };
 
   const handleSpeedChange = (newSpeed: number) => {
     setVoiceSpeed(newSpeed);
@@ -601,6 +680,8 @@ export function App() {
       ...targetSpec,
       voiceSpeed: selectedSpeed,
       subtitleStyle,
+      renderMode: targetSpec.renderMode || renderMode,
+      sfxEnabled,
       scenes: updatedScenes,
     };
 
@@ -667,7 +748,8 @@ export function App() {
 
   const generateAllImages = async (
     targetSpec: VideoSpec,
-    selectedVisualStyle = visualStyle
+    selectedVisualStyle = visualStyle,
+    forceEditorial = false
   ): Promise<VideoSpec> => {
     setImagesLoading(true);
     setImageError(null);
@@ -679,7 +761,9 @@ export function App() {
 
       for (let i = 0; i < updatedScenes.length; i++) {
         const scene = updatedScenes[i];
-        if (scene.type === "tactics") continue;
+        if (scene.type === "tactics" || scene.videoUrl) continue;
+        const effectiveMode = scene.sceneMode || targetSpec.renderMode || renderMode;
+        if (!forceEditorial && effectiveMode === "editorial") continue;
 
         setImagesProgress(`Imagen ${i + 1}/${updatedScenes.length}...`);
         const result = await fetchSceneImage(scene, selectedVisualStyle);
@@ -799,6 +883,7 @@ export function App() {
           durationSeconds: requestedSeconds,
           voiceSpeed,
           topicMode,
+          renderMode,
         }),
       });
 
@@ -827,13 +912,15 @@ export function App() {
         ...(data as VideoSpec),
         voiceSpeed,
         subtitleStyle,
+        renderMode,
+        sfxEnabled,
         targetDuration: data.targetDuration || requestedSeconds,
       };
       setSpec(currentSpec);
 
-      if (autoImages) {
-        setLoadingStep("Generando imágenes 9:16...");
-        currentSpec = await generateAllImages(currentSpec, visualStyle);
+      if (autoImages && renderMode !== "editorial") {
+        setLoadingStep("Generando visuales 9:16...");
+        currentSpec = await generateAllImages(currentSpec, visualStyle, false);
       }
 
       if (autoVoice && !audioUrl) {
@@ -877,11 +964,14 @@ export function App() {
 
     try {
       const assets: Record<string, { base64: string; ext: string }> = {};
+      let totalAssetBytes = 0;
 
       let globalAudioKey: string | undefined;
       if (audioUrl && audioUrl.startsWith("blob:")) {
         globalAudioKey = "global-audio";
-        assets[globalAudioKey] = await blobUrlToAsset(audioUrl, "mp3");
+        const item = await blobUrlToAsset(audioUrl, "mp3");
+        totalAssetBytes += item.byteSize;
+        assets[globalAudioKey] = { base64: item.base64, ext: item.ext };
       }
 
       const exportScenes: VideoScene[] = [];
@@ -891,25 +981,46 @@ export function App() {
 
         if (!globalAudioKey && s.audioUrl && s.audioUrl.startsWith("blob:")) {
           const key = `scene-audio-${i}`;
-          assets[key] = await blobUrlToAsset(s.audioUrl, "wav");
+          const item = await blobUrlToAsset(s.audioUrl, "wav");
+          totalAssetBytes += item.byteSize;
+          assets[key] = { base64: item.base64, ext: item.ext };
           copy.audioAssetKey = key;
         }
         delete copy.audioUrl;
 
         if (s.imageUrl && s.imageUrl.startsWith("blob:")) {
           const key = `scene-image-${i}`;
-          assets[key] = await blobUrlToAsset(s.imageUrl, "jpg");
+          const item = await blobUrlToAsset(s.imageUrl, "jpg");
+          totalAssetBytes += item.byteSize;
+          assets[key] = { base64: item.base64, ext: item.ext };
           copy.imageAssetKey = key;
           delete copy.imageUrl;
         }
 
+        if (s.videoUrl && s.videoUrl.startsWith("blob:")) {
+          const key = `scene-video-${i}`;
+          const item = await blobUrlToAsset(s.videoUrl, "mp4");
+          totalAssetBytes += item.byteSize;
+          assets[key] = { base64: item.base64, ext: item.ext };
+          copy.videoAssetKey = key;
+          delete copy.videoUrl;
+        }
+
         exportScenes.push(copy);
+      }
+
+      if (totalAssetBytes > 18 * 1024 * 1024) {
+        throw new Error(
+          `Los archivos subidos pesan ${(totalAssetBytes / (1024 * 1024)).toFixed(1)} MB. Usa clips de video más cortos o ligeros (máximo 18 MB en total) para exportar en la nube.`
+        );
       }
 
       const exportSpec: VideoSpec = {
         ...spec,
         voiceSpeed,
         subtitleStyle,
+        renderMode,
+        sfxEnabled,
         globalAudioKey,
         scenes: exportScenes,
       };
@@ -1006,8 +1117,37 @@ export function App() {
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const prev = spec.scenes[index]?.imageUrl;
+    if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
     const url = URL.createObjectURL(file);
     updateScene(index, { type: "cinematic", imageUrl: url });
+  };
+
+  const handleSceneVideoUpload = (
+    index: number,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const prev = spec.scenes[index]?.videoUrl;
+    if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+    const url = URL.createObjectURL(file);
+    updateScene(index, {
+      type: "cinematic",
+      videoUrl: url,
+      videoName: file.name,
+      videoMuted: true,
+    });
+  };
+
+  const removeSceneVideo = (index: number) => {
+    const prev = spec.scenes[index]?.videoUrl;
+    if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+    updateScene(index, {
+      videoUrl: undefined,
+      videoName: undefined,
+      videoAssetKey: undefined,
+    });
   };
 
   const updateScene = (index: number, patch: Partial<VideoScene>) => {
@@ -1023,8 +1163,12 @@ export function App() {
     const newScene: VideoScene = {
       id: `s-${Date.now()}`,
       type: "cinematic",
+      sceneMode: renderMode,
       layout: "story-clean",
       cameraMotion: "zoom-in",
+      transition: "slide-left",
+      iconName: "sparkles",
+      calloutText: "PUNTO CLAVE",
       durationSeconds: 5,
       badge: "NUEVA ESCENA",
       title: "TITULAR",
@@ -1047,7 +1191,13 @@ export function App() {
     const cleanSpec: VideoSpec = {
       ...spec,
       scenes: spec.scenes.map(
-        ({ audioUrl: _a, rawAudioDuration: _r, imageUrl: _i, ...rest }) => rest
+        ({
+          audioUrl: _a,
+          rawAudioDuration: _r,
+          imageUrl: _i,
+          videoUrl: _v,
+          ...rest
+        }) => rest
       ),
     };
     const blob = new Blob([JSON.stringify(cleanSpec, null, 2)], {
@@ -1125,7 +1275,7 @@ export function App() {
             {exportState.status === "completed" && h(CheckCircle2, { size: 16 })}
             <span>
               {exportState.status === "uploading" &&
-                "Empaquetando imágenes, subtítulos y audio para renderizar..."}
+                "Empaquetando imágenes, videos, subtítulos y audio para renderizar..."}
               {exportState.status === "queued" &&
                 "Trabajo enviado a GitHub Actions. Esperando servidor de render (1-2 min)..."}
               {exportState.status === "in_progress" &&
@@ -1172,19 +1322,36 @@ export function App() {
               rows={3}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Ej: Un video de 60 segundos explicando el misterio del Triángulo de las Bermudas, un análisis de IA y negocios, una historia épica de fútbol o curiosidades del espacio..."
+              placeholder="Ej: Un video de 45 segundos sobre cómo Florentino Pérez convenció a Figo de fichar por el Real Madrid, con ritmo editorial, íconos dinámicos de contratos y dinero, y pregunta final..."
             />
 
-            <select
-              value={topicMode}
-              onChange={(e) => setTopicMode(e.target.value as TopicMode)}
-            >
-              {TOPIC_OPTIONS.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+            <div className="voice-grid">
+              <select
+                value={renderMode}
+                onChange={(e) =>
+                  handleRenderModeChange(e.target.value as RenderMode)
+                }
+                className="full-span"
+              >
+                {RENDER_MODE_OPTIONS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={topicMode}
+                onChange={(e) => setTopicMode(e.target.value as TopicMode)}
+                className="full-span"
+              >
+                {TOPIC_OPTIONS.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div className="duration-presets">
               {DURATION_PRESETS.map((sec) => (
@@ -1231,13 +1398,13 @@ export function App() {
           <div className="card">
             <div className="card-header-between">
               <div className="card-title">
-                {h(Wand2, { size: 16 })}
-                <span>Visuales IA, voz y subtítulos</span>
+                {h(Layers, { size: 16 })}
+                <span>Visuales, animaciones, SFX y voz</span>
               </div>
               <div className="badge-group">
-                {imagesReadyCount > 0 && (
+                {mediaReadyCount > 0 && (
                   <span className="status-badge">
-                    {imageProvider ? "IA Visual" : "Imágenes"} ({imagesReadyCount}/
+                    {imageProvider ? "Visuales" : "Media"} ({mediaReadyCount}/
                     {spec.scenes.length})
                   </span>
                 )}
@@ -1323,7 +1490,7 @@ export function App() {
                 type="button"
                 className="btn-primary"
                 disabled={isBusy}
-                onClick={() => generateAllImages(spec, visualStyle)}
+                onClick={() => generateAllImages(spec, visualStyle, true)}
               >
                 {h(Wand2, { size: 15 })}
                 {imagesLoading
@@ -1382,7 +1549,7 @@ export function App() {
                   checked={autoImages}
                   onChange={(e) => setAutoImages(e.target.checked)}
                 />
-                <span>Generar imágenes IA al crear video</span>
+                <span>Generar imágenes IA</span>
               </label>
 
               <label className="checkbox-field">
@@ -1391,7 +1558,16 @@ export function App() {
                   checked={autoVoice}
                   onChange={(e) => setAutoVoice(e.target.checked)}
                 />
-                <span>Generar voz IA al crear video</span>
+                <span>Generar voz IA</span>
+              </label>
+
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={sfxEnabled}
+                  onChange={(e) => handleSfxToggle(e.target.checked)}
+                />
+                <span>Efectos de sonido (SFX)</span>
               </label>
             </div>
 
@@ -1434,7 +1610,7 @@ export function App() {
                       }}
                     >
                       <option value="hero-impact">Impacto / Portada</option>
-                      <option value="story-clean">Cinematográfica limpia</option>
+                      <option value="story-clean">Narrativa limpia</option>
                       <option value="split-versus">Duelo / Comparativa</option>
                       <option value="stat-overlay">Dato gigante</option>
                       <option value="quote-press">Titular / Cita</option>
@@ -1498,13 +1674,29 @@ export function App() {
                       {h(Volume2, { size: 15 })}
                     </button>
 
-                    <label className="icon-btn" title="Subir tu propia imagen/foto">
+                    <label
+                      className={`icon-btn ${scene.imageUrl ? "active-voice" : ""}`}
+                      title="Subir tu propia imagen/foto"
+                    >
                       {h(ImageIcon, { size: 15 })}
                       <input
                         type="file"
                         accept="image/*"
                         hidden
                         onChange={(e) => handleSceneImageUpload(index, e)}
+                      />
+                    </label>
+
+                    <label
+                      className={`icon-btn ${scene.videoUrl ? "active-video" : ""}`}
+                      title="Subir tu propio video (.mp4 / .webm / .mov) para esta escena"
+                    >
+                      {h(VideoIcon, { size: 15 })}
+                      <input
+                        type="file"
+                        accept="video/*"
+                        hidden
+                        onChange={(e) => handleSceneVideoUpload(index, e)}
                       />
                     </label>
 
@@ -1517,6 +1709,89 @@ export function App() {
                       {h(Trash2, { size: 15 })}
                     </button>
                   </div>
+
+                  {scene.videoUrl && (
+                    <div className="video-chip-row">
+                      <span className="video-chip-label">
+                        {h(VideoIcon, { size: 13 })}
+                        <span>{scene.videoName || "Video cargado"}</span>
+                      </span>
+                      <div className="video-chip-actions">
+                        <button
+                          type="button"
+                          className="mini-chip-btn"
+                          onClick={() =>
+                            updateScene(index, {
+                              videoMuted: scene.videoMuted === false ? true : false,
+                            })
+                          }
+                        >
+                          {scene.videoMuted === false
+                            ? h(Volume2, { size: 13 })
+                            : h(VolumeX, { size: 13 })}
+                          <span>
+                            {scene.videoMuted === false ? "Con audio" : "Silenciado"}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="mini-chip-btn danger"
+                          onClick={() => removeSceneVideo(index)}
+                        >
+                          {h(Trash2, { size: 13 })}
+                          <span>Quitar</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {scene.type !== "tactics" && (
+                    <div className="scene-motion-row">
+                      <select
+                        value={scene.sceneMode || renderMode}
+                        onChange={(e) =>
+                          updateScene(index, {
+                            sceneMode: e.target.value as RenderMode,
+                          })
+                        }
+                        title="Estilo visual de esta escena"
+                      >
+                        <option value="hybrid">Híbrida</option>
+                        <option value="editorial">Editorial (Íconos)</option>
+                        <option value="cinematic">Cinematográfica</option>
+                      </select>
+
+                      <select
+                        value={scene.iconName || "sparkles"}
+                        onChange={(e) =>
+                          updateScene(index, { iconName: e.target.value })
+                        }
+                        title="Ícono dinámico de la escena"
+                      >
+                        {ICON_OPTIONS.map((ic) => (
+                          <option key={ic.id} value={ic.id}>
+                            {ic.label}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={scene.transition || "slide-left"}
+                        onChange={(e) =>
+                          updateScene(index, {
+                            transition: e.target.value as TransitionType,
+                          })
+                        }
+                        title="Transición hacia la siguiente escena"
+                      >
+                        {TRANSITION_OPTIONS.map((tr) => (
+                          <option key={tr.id} value={tr.id}>
+                            {tr.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   <input
                     type="text"
@@ -1533,15 +1808,26 @@ export function App() {
                     placeholder="Texto narrado y subtítulo en pantalla"
                   />
                   {scene.type !== "tactics" && (
-                    <input
-                      type="text"
-                      value={scene.imagePrompt || ""}
-                      onChange={(e) =>
-                        updateScene(index, { imagePrompt: e.target.value })
-                      }
-                      placeholder="Prompt visual de la escena (puedes editarlo y pulsar la varita mágica)"
-                      className="prompt-input"
-                    />
+                    <>
+                      <input
+                        type="text"
+                        value={scene.calloutText || ""}
+                        onChange={(e) =>
+                          updateScene(index, { calloutText: e.target.value })
+                        }
+                        placeholder="Etiqueta dinámica a mitad de escena (ej. CLÁUSULA: 60M €)"
+                        className="callout-input"
+                      />
+                      <input
+                        type="text"
+                        value={scene.imagePrompt || ""}
+                        onChange={(e) =>
+                          updateScene(index, { imagePrompt: e.target.value })
+                        }
+                        placeholder="Prompt visual de la escena (puedes editarlo y pulsar la varita mágica)"
+                        className="prompt-input"
+                      />
+                    </>
                   )}
                 </div>
               ))}
