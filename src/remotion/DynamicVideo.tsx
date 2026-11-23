@@ -22,9 +22,13 @@ import { noise2D } from "@remotion/noise";
 import {
   AlertTriangle,
   Award,
+  BadgeCheck,
   Banknote,
   Brain,
   Briefcase,
+  Building2,
+  Calendar,
+  CheckCircle2,
   Clock,
   Compass,
   Cpu,
@@ -38,8 +42,10 @@ import {
   Heart,
   Landmark,
   Lock,
+  MapPin,
   Megaphone,
   Newspaper,
+  Phone,
   Radio,
   Rocket,
   Scale,
@@ -49,7 +55,9 @@ import {
   Target,
   TrendingUp,
   Trophy,
+  UserCheck,
   Users,
+  Wrench,
   Zap,
 } from "lucide-react";
 import {
@@ -71,6 +79,7 @@ const TSTrans = TransitionSeries.Transition as unknown as React.ComponentType<an
 
 export const SCENE_LEAD_IN_FRAMES = 6;
 export const TRANSITION_FRAMES = 10;
+const BRAND_HEADER_HEIGHT = 156;
 
 export function getSceneFrames(scene: VideoScene, fps = 30): number {
   return Math.max(36, Math.ceil((scene.durationSeconds || 5) * fps));
@@ -116,6 +125,14 @@ const ICON_MAP: Record<string, React.ComponentType<any>> = {
   award: Award,
   radio: Radio,
   flag: Flag,
+  "user-check": UserCheck,
+  "map-pin": MapPin,
+  "badge-check": BadgeCheck,
+  phone: Phone,
+  calendar: Calendar,
+  building: Building2,
+  "check-circle": CheckCircle2,
+  wrench: Wrench,
 };
 
 function getIconComponent(name?: string): React.ComponentType<any> {
@@ -148,6 +165,7 @@ type SceneCommonProps = {
   sceneIndex: number;
   renderMode: RenderMode;
   sfxEnabled: boolean;
+  showBrandHeader: boolean;
 };
 
 const resolveMediaSrc = (src?: string | null): string | undefined => {
@@ -161,6 +179,127 @@ const resolveMediaSrc = (src?: string | null): string | undefined => {
     return src;
   }
   return staticFile(src);
+};
+
+const BrandHeaderBar: React.FC<{
+  companyName: string;
+  companyBadge?: string;
+  logoSrc?: string;
+}> = ({ companyName, companyBadge = "VACANTE DISPONIBLE", logoSrc }) => {
+  return h(
+    "div",
+    {
+      style: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        height: BRAND_HEADER_HEIGHT,
+        zIndex: 50,
+        background:
+          "linear-gradient(180deg, rgba(24, 27, 26, 0.97) 0%, rgba(38, 40, 42, 0.94) 100%)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "18px 34px 22px 38px",
+        boxSizing: "border-box",
+        boxShadow: "0 12px 32px rgba(0, 0, 0, 0.48)",
+        fontFamily: "system-ui, -apple-system, sans-serif",
+      },
+    },
+    h(
+      "div",
+      {
+        style: {
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          gap: 6,
+          flex: 1,
+          paddingRight: 22,
+        },
+      },
+      h(
+        "div",
+        {
+          style: {
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 10,
+            color: "#BCD853",
+            fontSize: 20,
+            fontWeight: 900,
+            letterSpacing: 3.2,
+            textTransform: "uppercase",
+          },
+        },
+        h("span", {
+          style: {
+            width: 12,
+            height: 12,
+            borderRadius: 999,
+            backgroundColor: "#7EC34A",
+            display: "inline-block",
+          },
+        }),
+        companyBadge
+      ),
+      h(
+        "div",
+        {
+          style: {
+            color: "#FFFFFF",
+            fontSize: 31,
+            fontWeight: 900,
+            lineHeight: 1.12,
+            letterSpacing: 0.4,
+            textTransform: "uppercase",
+          },
+        },
+        companyName
+      )
+    ),
+    logoSrc
+      ? h(
+          "div",
+          {
+            style: {
+              width: 184,
+              height: 106,
+              borderRadius: 18,
+              backgroundColor: "#FFFFFF",
+              border: "3px solid #7EC34A",
+              padding: "8px 14px",
+              boxSizing: "border-box",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              boxShadow: "0 8px 20px rgba(0, 0, 0, 0.35)",
+            },
+          },
+          h(Img, {
+            src: logoSrc,
+            style: {
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+            },
+          })
+        )
+      : null,
+    h("div", {
+      style: {
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: 9,
+        background:
+          "linear-gradient(90deg, #008F4C 0%, #7EC34A 52%, #BCD853 100%)",
+      },
+    })
+  );
 };
 
 const buildWordChunks = (
@@ -223,10 +362,11 @@ const buildWordChunks = (
   return chunks;
 };
 
-const ClassicSubtitle: React.FC<{ text: string; accent: string }> = ({
-  text,
-  accent,
-}) => {
+const ClassicSubtitle: React.FC<{
+  text: string;
+  accent: string;
+  compact?: boolean;
+}> = ({ text, accent, compact = false }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = spring({
@@ -242,18 +382,18 @@ const ClassicSubtitle: React.FC<{ text: string; accent: string }> = ({
     {
       style: {
         position: "absolute",
-        bottom: 94,
-        left: 52,
-        right: 52,
-        backgroundColor: "rgba(5, 10, 20, 0.84)",
+        bottom: compact ? 36 : 94,
+        left: compact ? 40 : 52,
+        right: compact ? 40 : 52,
+        backgroundColor: "rgba(18, 22, 20, 0.88)",
         borderLeft: `8px solid ${accent}`,
-        borderRadius: 20,
-        padding: "24px 30px",
+        borderRadius: 18,
+        padding: compact ? "16px 24px" : "24px 30px",
         textAlign: "center",
-        fontSize: 38,
+        fontSize: compact ? 30 : 38,
         fontWeight: 800,
         color: "#FFFFFF",
-        lineHeight: 1.28,
+        lineHeight: 1.24,
         boxShadow: "0 16px 38px rgba(0, 0, 0, 0.5)",
         fontFamily: "system-ui, -apple-system, sans-serif",
         opacity: enter,
@@ -268,7 +408,8 @@ const DynamicSubtitle: React.FC<{
   scene: VideoScene;
   accent: string;
   voiceSpeed: number;
-}> = ({ scene, accent, voiceSpeed }) => {
+  compact?: boolean;
+}> = ({ scene, accent, voiceSpeed, compact = false }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
 
@@ -306,7 +447,7 @@ const DynamicSubtitle: React.FC<{
     {
       style: {
         position: "absolute",
-        bottom: 110,
+        bottom: compact ? 38 : 110,
         left: 42,
         right: 42,
         display: "flex",
@@ -322,7 +463,7 @@ const DynamicSubtitle: React.FC<{
           flexWrap: "wrap",
           justifyContent: "center",
           alignItems: "center",
-          gap: "10px 14px",
+          gap: compact ? "8px 10px" : "10px 14px",
           maxWidth: "100%",
           fontFamily: "system-ui, -apple-system, sans-serif",
           transform: `translateY(${interpolate(chunkPop, [0, 1], [14, 0])}px) scale(${interpolate(chunkPop, [0, 1], [0.94, 1])})`,
@@ -345,20 +486,24 @@ const DynamicSubtitle: React.FC<{
             key: `${activeChunkIndex}-${idx}`,
             style: {
               display: "inline-block",
-              fontSize: 54,
+              fontSize: compact ? 40 : 54,
               fontWeight: 900,
-              letterSpacing: -0.6,
+              letterSpacing: -0.5,
               lineHeight: 1.12,
-              padding: isCurrent ? "6px 18px" : "6px 8px",
-              borderRadius: 16,
-              backgroundColor: isCurrent ? accent : "rgba(6, 12, 24, 0.58)",
+              padding: isCurrent
+                ? compact
+                  ? "5px 14px"
+                  : "6px 18px"
+                : "5px 8px",
+              borderRadius: 14,
+              backgroundColor: isCurrent ? accent : "rgba(18, 22, 20, 0.72)",
               color: isCurrent
-                ? "#07111F"
+                ? "#111613"
                 : isSpoken
                 ? "#FFFFFF"
                 : "rgba(255, 255, 255, 0.72)",
               transform: isCurrent
-                ? `scale(${interpolate(wordSpring, [0, 1], [0.9, 1.1])})`
+                ? `scale(${interpolate(wordSpring, [0, 1], [0.9, 1.08])})`
                 : "scale(1)",
               textShadow: isCurrent ? "none" : "0 4px 16px rgba(0, 0, 0, 0.9)",
               boxShadow: isCurrent ? "0 10px 26px rgba(0, 0, 0, 0.45)" : "none",
@@ -376,17 +521,19 @@ const SceneSubtitle: React.FC<{
   accent: string;
   voiceSpeed: number;
   subtitleStyle: SubtitleStyle;
-}> = ({ scene, accent, voiceSpeed, subtitleStyle }) => {
+  compact?: boolean;
+}> = ({ scene, accent, voiceSpeed, subtitleStyle, compact = false }) => {
   if (subtitleStyle === "classic") {
-    return h(ClassicSubtitle, { text: scene.subtitle, accent });
+    return h(ClassicSubtitle, { text: scene.subtitle, accent, compact });
   }
-  return h(DynamicSubtitle, { scene, accent, voiceSpeed });
+  return h(DynamicSubtitle, { scene, accent, voiceSpeed, compact });
 };
 
 const EditorialBackdrop: React.FC<{
   theme: VideoTheme;
   sceneIndex: number;
-}> = ({ theme, sceneIndex }) => {
+  showBrandHeader: boolean;
+}> = ({ theme, sceneIndex, showBrandHeader }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const progress = interpolate(frame, [0, Math.max(1, durationInFrames)], [0, 1], {
@@ -423,7 +570,7 @@ const EditorialBackdrop: React.FC<{
       {
         style: {
           position: "absolute",
-          top: 260 + ny1 * 0.35,
+          top: (showBrandHeader ? 320 : 260) + ny1 * 0.35,
           left: 70 + nx1 * 0.25,
           opacity: 0.22,
           transform: `rotate(${rot1}deg)`,
@@ -442,7 +589,7 @@ const EditorialBackdrop: React.FC<{
       {
         style: {
           position: "absolute",
-          top: 440 + ny2 * 0.3,
+          top: (showBrandHeader ? 490 : 440) + ny2 * 0.3,
           right: 64 + nx2 * 0.2,
           opacity: 0.2,
           transform: `rotate(${rot2}deg)`,
@@ -499,7 +646,7 @@ const EditorialBackdrop: React.FC<{
       {
         style: {
           position: "absolute",
-          top: 28,
+          top: showBrandHeader ? BRAND_HEADER_HEIGHT + 12 : 28,
           left: 44,
           right: 44,
           height: 6,
@@ -526,7 +673,16 @@ const AnimatedBackdrop: React.FC<{
   theme: VideoTheme;
   motion: CameraMotion;
   sceneIndex: number;
-}> = ({ imgSrc, videoSrc, videoMuted = true, theme, motion, sceneIndex }) => {
+  showBrandHeader: boolean;
+}> = ({
+  imgSrc,
+  videoSrc,
+  videoMuted = true,
+  theme,
+  motion,
+  sceneIndex,
+  showBrandHeader,
+}) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const progress = interpolate(frame, [0, Math.max(1, durationInFrames)], [0, 1], {
@@ -615,7 +771,7 @@ const AnimatedBackdrop: React.FC<{
     h(AbsoluteFill, {
       style: {
         background:
-          "linear-gradient(180deg, rgba(4,9,20,0.78) 0%, rgba(4,9,20,0.16) 28%, rgba(4,9,20,0.06) 54%, rgba(4,9,20,0.86) 100%)",
+          "linear-gradient(180deg, rgba(14,18,16,0.78) 0%, rgba(14,18,16,0.16) 28%, rgba(14,18,16,0.06) 54%, rgba(14,18,16,0.86) 100%)",
       },
     }),
     h("div", {
@@ -636,7 +792,7 @@ const AnimatedBackdrop: React.FC<{
       {
         style: {
           position: "absolute",
-          top: 28,
+          top: showBrandHeader ? BRAND_HEADER_HEIGHT + 12 : 28,
           left: 44,
           right: 44,
           height: 6,
@@ -671,7 +827,8 @@ const EditorialCenterStage: React.FC<{
   imgSrc?: string;
   videoSrc?: string;
   videoMuted?: boolean;
-}> = ({ scene, theme, imgSrc, videoSrc, videoMuted = true }) => {
+  showBrandHeader: boolean;
+}> = ({ scene, theme, imgSrc, videoSrc, videoMuted = true, showBrandHeader }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const IconComp = getIconComponent(scene.iconName);
@@ -691,10 +848,10 @@ const EditorialCenterStage: React.FC<{
       {
         style: {
           position: "absolute",
-          top: 470,
+          top: showBrandHeader ? 535 : 470,
           left: 90,
           right: 90,
-          height: 690,
+          height: showBrandHeader ? 620 : 690,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -756,10 +913,10 @@ const EditorialCenterStage: React.FC<{
     {
       style: {
         position: "absolute",
-        top: 500,
+        top: showBrandHeader ? 560 : 500,
         left: 0,
         right: 0,
-        height: 540,
+        height: 520,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -769,8 +926,8 @@ const EditorialCenterStage: React.FC<{
     h("div", {
       style: {
         position: "absolute",
-        width: 470,
-        height: 470,
+        width: 450,
+        height: 450,
         borderRadius: 999,
         border: `4px dashed ${theme.accentColor}66`,
         transform: `rotate(${frame * 0.45}deg) scale(${ringPulse})`,
@@ -779,8 +936,8 @@ const EditorialCenterStage: React.FC<{
     h("div", {
       style: {
         position: "absolute",
-        width: 370,
-        height: 370,
+        width: 360,
+        height: 360,
         borderRadius: 999,
         background: `radial-gradient(circle, ${theme.accentColor}38 0%, transparent 72%)`,
         transform: `scale(${ringPulse})`,
@@ -790,8 +947,8 @@ const EditorialCenterStage: React.FC<{
       "div",
       {
         style: {
-          width: 310,
-          height: 310,
+          width: 300,
+          height: 300,
           borderRadius: 72,
           background: `linear-gradient(145deg, ${theme.primaryColor}, ${theme.secondaryColor})`,
           border: `7px solid ${theme.accentColor}`,
@@ -803,7 +960,7 @@ const EditorialCenterStage: React.FC<{
           transform: `translateY(${floatY}px) scale(${interpolate(enter, [0, 1], [0.55, 1])}) rotate(${interpolate(enter, [0, 1], [-14, 0])}deg)`,
         },
       },
-      h(IconComp, { size: 158, color: "#FFFFFF", strokeWidth: 2.1 })
+      h(IconComp, { size: 150, color: "#FFFFFF", strokeWidth: 2.1 })
     )
   );
 };
@@ -834,7 +991,7 @@ const MidSceneCallout: React.FC<{
     {
       style: {
         position: "absolute",
-        bottom: isEditorial ? 430 : 390,
+        bottom: isEditorial ? 420 : 390,
         left: 52,
         right: 52,
         display: "flex",
@@ -851,7 +1008,7 @@ const MidSceneCallout: React.FC<{
           gap: 18,
           padding: "18px 30px",
           borderRadius: 999,
-          backgroundColor: "rgba(7, 17, 31, 0.9)",
+          backgroundColor: "rgba(24, 28, 26, 0.92)",
           border: `4px solid ${theme.accentColor}`,
           boxShadow: "0 18px 42px rgba(0,0,0,0.6)",
           opacity: pop,
@@ -866,7 +1023,7 @@ const MidSceneCallout: React.FC<{
             height: 56,
             borderRadius: 999,
             backgroundColor: theme.accentColor,
-            color: "#07111F",
+            color: "#111613",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -889,6 +1046,141 @@ const MidSceneCallout: React.FC<{
         scene.calloutText
       )
     )
+  );
+};
+
+const FlyerEndStage: React.FC<{
+  scene: VideoScene;
+  theme: VideoTheme;
+  imgSrc?: string;
+  showBrandHeader: boolean;
+}> = ({ scene, theme, imgSrc, showBrandHeader }) => {
+  const frame = useCurrentFrame();
+  const { fps, durationInFrames } = useVideoConfig();
+  const enter = spring({
+    frame,
+    fps,
+    config: { damping: 15, stiffness: 150 },
+  });
+  const gentleScale = interpolate(
+    frame,
+    [0, Math.max(1, durationInFrames)],
+    [0.985, 1.02],
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    }
+  );
+
+  return h(
+    "div",
+    {
+      style: {
+        position: "absolute",
+        top: showBrandHeader ? BRAND_HEADER_HEIGHT + 34 : 72,
+        bottom: 205,
+        left: 36,
+        right: 36,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: enter,
+        transform: `translateY(${interpolate(enter, [0, 1], [36, 0])}px) scale(${gentleScale})`,
+      },
+    },
+    imgSrc
+      ? h(
+          "div",
+          {
+            style: {
+              width: "100%",
+              height: "100%",
+              borderRadius: 28,
+              backgroundColor: "rgba(18, 22, 20, 0.72)",
+              border: `5px solid ${theme.accentColor}`,
+              padding: 14,
+              boxSizing: "border-box",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 26px 68px rgba(0, 0, 0, 0.65)",
+            },
+          },
+          h(Img, {
+            src: imgSrc || "",
+            style: {
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              borderRadius: 18,
+            },
+          })
+        )
+      : h(
+          "div",
+          {
+            style: {
+              width: "100%",
+              height: "82%",
+              borderRadius: 32,
+              backgroundColor: "rgba(38, 40, 42, 0.88)",
+              border: `5px dashed ${theme.accentColor}`,
+              padding: "48px 44px",
+              boxSizing: "border-box",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              textAlign: "center",
+              gap: 24,
+              boxShadow: "0 24px 60px rgba(0, 0, 0, 0.55)",
+            },
+          },
+          h(
+            "div",
+            {
+              style: {
+                width: 136,
+                height: 136,
+                borderRadius: 36,
+                backgroundColor: theme.primaryColor,
+                border: `5px solid ${theme.accentColor}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              },
+            },
+            h(BadgeCheck, { size: 74, color: "#FFFFFF", strokeWidth: 2.2 })
+          ),
+          h(
+            "div",
+            {
+              style: {
+                fontSize: 48,
+                fontWeight: 900,
+                color: theme.accentColor,
+                letterSpacing: 1,
+                textTransform: "uppercase",
+              },
+            },
+            "ESPACIO PARA TU FLYER FINAL"
+          ),
+          h(
+            "div",
+            {
+              style: {
+                fontSize: 32,
+                fontWeight: 600,
+                color: "#E2E8F0",
+                lineHeight: 1.35,
+              },
+            },
+            scene.title
+              ? `Sube la imagen del flyer de "${scene.title}" en el panel de Reclutamiento para mostrar aquí todos los datos de contacto sin recortes.`
+              : "Sube la imagen de tu flyer en el panel de Reclutamiento para mostrar aquí toda la información de la vacante."
+          )
+        )
   );
 };
 
@@ -929,14 +1221,17 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
   sceneIndex,
   renderMode,
   sfxEnabled,
+  showBrandHeader,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
   const layout = inferLayout(scene);
   const motion = inferMotion(scene, sceneIndex);
-  const activeMode = resolveSceneMode(scene, renderMode);
+  const isFlyerEnd = layout === "flyer-end";
+  const activeMode = isFlyerEnd ? "editorial" : resolveSceneMode(scene, renderMode);
   const isEditorial = activeMode === "editorial";
   const isHybrid = activeMode === "hybrid";
+  const topOffset = showBrandHeader ? 128 : 0;
 
   const imgSrc = resolveMediaSrc(scene.imageUrl);
   const videoSrc = resolveMediaSrc(scene.videoUrl);
@@ -967,6 +1262,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
   });
 
   const showMidCallout =
+    !isFlyerEnd &&
     (isEditorial || isHybrid) &&
     Boolean(scene.calloutText?.trim()) &&
     layout !== "split-versus" &&
@@ -985,7 +1281,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
       },
     },
     isEditorial
-      ? h(EditorialBackdrop, { theme, sceneIndex })
+      ? h(EditorialBackdrop, { theme, sceneIndex, showBrandHeader })
       : h(AnimatedBackdrop, {
           imgSrc,
           videoSrc,
@@ -993,15 +1289,20 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
           theme,
           motion,
           sceneIndex,
+          showBrandHeader,
         }),
-    sfxEnabled && (showMidCallout || layout === "stat-overlay")
+    sfxEnabled && (showMidCallout || layout === "stat-overlay" || isFlyerEnd)
       ? h(
           Sequence,
-          { from: showMidCallout ? popFrame : 14, durationInFrames: 12 },
+          { from: isFlyerEnd ? 4 : showMidCallout ? popFrame : 14, durationInFrames: 12 },
           h(Audio, { src: staticFile("sfx/pop.wav"), volume: 0.16 })
         )
       : null,
-    isEditorial &&
+    isFlyerEnd
+      ? h(FlyerEndStage, { scene, theme, imgSrc, showBrandHeader })
+      : null,
+    !isFlyerEnd &&
+      isEditorial &&
       layout !== "split-versus" &&
       layout !== "stat-overlay" &&
       layout !== "cta-engage"
@@ -1011,20 +1312,21 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
           imgSrc,
           videoSrc,
           videoMuted: scene.videoMuted !== false,
+          showBrandHeader,
         })
       : null,
-    isHybrid && !isEditorial && scene.iconName
+    !isFlyerEnd && isHybrid && !isEditorial && scene.iconName
       ? h(
           "div",
           {
             style: {
               position: "absolute",
-              top: 66,
+              top: 66 + topOffset,
               right: 48,
               width: 90,
               height: 90,
               borderRadius: 26,
-              backgroundColor: "rgba(7, 17, 31, 0.78)",
+              backgroundColor: "rgba(24, 28, 26, 0.84)",
               border: `4px solid ${theme.accentColor}`,
               display: "flex",
               alignItems: "center",
@@ -1043,7 +1345,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
           {
             style: {
               position: "absolute",
-              top: 86,
+              top: 86 + topOffset,
               left: 52,
               right: 52,
               display: "flex",
@@ -1058,7 +1360,8 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
               style: {
                 padding: "10px 28px",
                 borderRadius: 999,
-                backgroundColor: theme.secondaryColor,
+                backgroundColor: theme.primaryColor,
+                border: `3px solid ${theme.accentColor}`,
                 color: "#FFFFFF",
                 fontSize: 26,
                 fontWeight: 900,
@@ -1076,7 +1379,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
             {
               style: {
                 margin: 0,
-                fontSize: 84,
+                fontSize: showBrandHeader ? 76 : 84,
                 fontWeight: 900,
                 lineHeight: 0.98,
                 letterSpacing: -2,
@@ -1106,7 +1409,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
           {
             style: {
               position: "absolute",
-              top: 82,
+              top: 82 + topOffset,
               left: 52,
               right: isHybrid ? 150 : 52,
             },
@@ -1120,7 +1423,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
                 gap: 12,
                 padding: "8px 22px",
                 borderRadius: 12,
-                backgroundColor: "rgba(6, 12, 24, 0.72)",
+                backgroundColor: "rgba(20, 24, 22, 0.78)",
                 borderLeft: `6px solid ${theme.accentColor}`,
                 color: theme.accentColor,
                 fontSize: 24,
@@ -1138,7 +1441,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
             {
               style: {
                 margin: 0,
-                fontSize: 62,
+                fontSize: showBrandHeader ? 58 : 62,
                 fontWeight: 900,
                 lineHeight: 1.05,
                 textShadow: "0 8px 28px rgba(0,0,0,0.9)",
@@ -1159,7 +1462,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
             {
               style: {
                 position: "absolute",
-                top: 78,
+                top: 78 + topOffset,
                 left: 48,
                 right: 48,
                 textAlign: "center",
@@ -1290,7 +1593,14 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
           null,
           h(
             "div",
-            { style: { position: "absolute", top: 82, left: 52, right: isHybrid ? 150 : 52 } },
+            {
+              style: {
+                position: "absolute",
+                top: 82 + topOffset,
+                left: 52,
+                right: isHybrid ? 150 : 52,
+              },
+            },
             h(
               "div",
               {
@@ -1309,7 +1619,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
               {
                 style: {
                   margin: "10px 0 0 0",
-                  fontSize: 64,
+                  fontSize: showBrandHeader ? 58 : 64,
                   fontWeight: 900,
                   lineHeight: 1.05,
                   textShadow: "0 8px 26px rgba(0,0,0,0.9)",
@@ -1323,7 +1633,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
             {
               style: {
                 position: "absolute",
-                bottom: isEditorial ? 560 : 360,
+                bottom: isEditorial ? 520 : 360,
                 left: 52,
                 right: 52,
                 display: "flex",
@@ -1356,12 +1666,13 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
               "div",
               {
                 style: {
-                  fontSize: 152,
+                  fontSize: 142,
                   fontWeight: 900,
                   lineHeight: 0.95,
                   color: theme.accentColor,
                   textShadow: "0 14px 40px rgba(0,0,0,0.95)",
                   letterSpacing: -4,
+                  textAlign: "center",
                 },
               },
               scene.highlightValue || "100%"
@@ -1374,7 +1685,8 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
                       marginTop: 14,
                       padding: "10px 30px",
                       borderRadius: 12,
-                      backgroundColor: theme.secondaryColor,
+                      backgroundColor: theme.primaryColor,
+                      border: `3px solid ${theme.accentColor}`,
                       color: "#FFFFFF",
                       fontSize: 34,
                       fontWeight: 900,
@@ -1395,7 +1707,14 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
           null,
           h(
             "div",
-            { style: { position: "absolute", top: 82, left: 52, right: isHybrid ? 150 : 52 } },
+            {
+              style: {
+                position: "absolute",
+                top: 82 + topOffset,
+                left: 52,
+                right: isHybrid ? 150 : 52,
+              },
+            },
             h(
               "div",
               {
@@ -1403,7 +1722,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
                   display: "inline-block",
                   padding: "8px 22px",
                   borderRadius: 8,
-                  backgroundColor: "#DC2626",
+                  backgroundColor: showBrandHeader ? theme.primaryColor : "#DC2626",
                   color: "#FFFFFF",
                   fontSize: 24,
                   fontWeight: 900,
@@ -1418,7 +1737,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
               {
                 style: {
                   margin: 0,
-                  fontSize: 64,
+                  fontSize: showBrandHeader ? 58 : 64,
                   fontWeight: 900,
                   lineHeight: 1.04,
                   textShadow: "0 8px 28px rgba(0,0,0,0.9)",
@@ -1436,7 +1755,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
                     bottom: 350,
                     left: 52,
                     right: 52,
-                    backgroundColor: "rgba(7, 17, 31, 0.86)",
+                    backgroundColor: "rgba(24, 28, 26, 0.88)",
                     borderLeft: `10px solid ${theme.accentColor}`,
                     borderRadius: 20,
                     padding: "26px 32px",
@@ -1462,7 +1781,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
             {
               style: {
                 position: "absolute",
-                top: 90,
+                top: 90 + topOffset,
                 left: 52,
                 right: 52,
                 textAlign: "center",
@@ -1486,7 +1805,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
               {
                 style: {
                   margin: 0,
-                  fontSize: 70,
+                  fontSize: showBrandHeader ? 62 : 70,
                   fontWeight: 900,
                   lineHeight: 1.04,
                   textShadow: "0 10px 30px rgba(0,0,0,0.9)",
@@ -1510,14 +1829,14 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
                 transform: `translateY(${interpolate(detailSpring, [0, 1], [28, 0])}px)`,
               },
             },
-            (scene.bullets || []).slice(0, 2).map((b, i) =>
+            (scene.bullets || []).slice(0, 3).map((b, i) =>
               h(
                 "div",
                 {
                   key: i,
                   style: {
-                    backgroundColor: "rgba(7, 17, 31, 0.82)",
-                    border: `3px solid ${i === 0 ? theme.accentColor : "rgba(255,255,255,0.4)"}`,
+                    backgroundColor: "rgba(24, 28, 26, 0.86)",
+                    border: `3px solid ${i === 0 ? theme.accentColor : "rgba(167, 169, 172, 0.5)"}`,
                     borderRadius: 22,
                     padding: "22px 28px",
                     fontSize: 34,
@@ -1535,7 +1854,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
                       height: 48,
                       borderRadius: 12,
                       backgroundColor: theme.accentColor,
-                      color: "#07111F",
+                      color: "#111613",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -1552,7 +1871,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
               {
                 style: {
                   backgroundColor: theme.accentColor,
-                  color: "#07111F",
+                  color: "#111613",
                   borderRadius: 24,
                   padding: "26px 30px",
                   textAlign: "center",
@@ -1572,6 +1891,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
       accent: theme.accentColor,
       voiceSpeed,
       subtitleStyle,
+      compact: isFlyerEnd,
     })
   );
 };
@@ -1581,6 +1901,7 @@ const SceneTactics: React.FC<SceneCommonProps> = ({
   theme,
   voiceSpeed,
   subtitleStyle,
+  showBrandHeader,
 }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
@@ -1660,7 +1981,7 @@ const SceneTactics: React.FC<SceneCommonProps> = ({
         backgroundColor: theme.bgColor,
         fontFamily: "system-ui, -apple-system, sans-serif",
         color: "#FFFFFF",
-        padding: "86px 56px",
+        padding: showBrandHeader ? "190px 56px 86px" : "86px 56px",
         alignItems: "center",
       },
     },
@@ -1759,7 +2080,11 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
   const subtitleStyle: SubtitleStyle = spec.subtitleStyle || "dynamic";
   const renderMode: RenderMode = spec.renderMode || "hybrid";
   const sfxEnabled = spec.sfxEnabled !== false;
+  const showBrandHeader = Boolean(spec.showBrandHeader);
   const resolvedGlobalAudio = resolveMediaSrc(audioUrl);
+  const resolvedLogoSrc = showBrandHeader
+    ? resolveMediaSrc(spec.companyLogoUrl || "logoasr.png")
+    : undefined;
 
   const seriesChildren: React.ReactNode[] = [];
 
@@ -1795,6 +2120,7 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
             sceneIndex: index,
             renderMode,
             sfxEnabled,
+            showBrandHeader,
           })
         : h(SceneDynamic, {
             scene,
@@ -1804,6 +2130,7 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
             sceneIndex: index,
             renderMode,
             sfxEnabled,
+            showBrandHeader,
           });
 
     seriesChildren.push(
@@ -1831,6 +2158,14 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
     AbsoluteFill,
     { style: { backgroundColor: theme.bgColor } },
     resolvedGlobalAudio ? h(Audio, { src: resolvedGlobalAudio }) : null,
-    h(TS, null, ...seriesChildren)
+    h(TS, null, ...seriesChildren),
+    showBrandHeader
+      ? h(BrandHeaderBar, {
+          companyName:
+            spec.companyName || "UNIÓN DE PRODUCTORES DE CAÑA DE JOACHÍN",
+          companyBadge: spec.companyBadge || "VACANTE DISPONIBLE",
+          logoSrc: resolvedLogoSrc,
+        })
+      : null
   );
 };

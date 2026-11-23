@@ -3,8 +3,15 @@ const getEnv = (key) =>
   (typeof Deno !== "undefined" && Deno.env?.get(key)) ||
   "";
 
-const GEMINI_API_BASE =
-  "https" + "://generativelanguage.googleapis.com/v1beta/models";
+const GEMINI_HOST = ["generativelanguage", "googleapis", "com"].join(".");
+const GEMINI_API_BASE = "https" + "://" + GEMINI_HOST + "/v1beta/models";
+
+const RECRUITMENT_THEME = {
+  primaryColor: "#008F4C",
+  secondaryColor: "#7EC34A",
+  accentColor: "#BCD853",
+  bgColor: "#26282A",
+};
 
 function clampDuration(sec) {
   return Math.min(180, Math.max(10, Math.round(sec)));
@@ -74,8 +81,19 @@ function getTargetSceneCount(targetSeconds) {
   return Math.min(12, Math.max(9, Math.round(targetSeconds / 11)));
 }
 
-function normalizeSceneDurations(scenes, targetSeconds) {
+function normalizeSceneDurations(scenes, targetSeconds, fixedLastDuration = null) {
   if (!Array.isArray(scenes) || scenes.length === 0) return scenes;
+
+  if (fixedLastDuration && scenes.length > 1) {
+    const lastSec = Math.min(15, Math.max(4, Number(fixedLastDuration) || 6));
+    const bodyTarget = Math.max(8, targetSeconds - lastSec);
+    const bodyScenes = normalizeSceneDurations(scenes.slice(0, -1), bodyTarget, null);
+    const lastScene = {
+      ...scenes[scenes.length - 1],
+      durationSeconds: Number(lastSec.toFixed(1)),
+    };
+    return [...bodyScenes, lastScene];
+  }
 
   const weights = scenes.map((s) => {
     const words = String(s.subtitle || s.title || "")
@@ -149,12 +167,13 @@ const TOPIC_HINTS = {
   tech: "Enfoque de tecnología, inteligencia artificial, negocios o finanzas con estética moderna, limpia y ejecutiva.",
   viral: "Enfoque de curiosidades, ciencia, psicología o datos sorprendentes con ganchos rápidos y visuales llamativos.",
   cinema: "Enfoque de cine, cultura pop, videojuegos o entretenimiento con iluminación dramática de película.",
+  recruitment: "Enfoque profesional y atractivo de reclutamiento laboral y atracción de talento corporativo/agroindustrial.",
 };
 
 const RENDER_MODE_HINTS = {
   hybrid: `MODO HÍBRIDO (OBLIGATORIO MEZCLAR):
 - Alterna inteligentemente "sceneMode" entre "hybrid" (imagen visual + ícono dinámico + etiqueta flotante) y "editorial" (motion graphics puro con ícono grande animado, cuadrícula viva y tarjetas editoriales sin foto de fondo).
-- Usa "sceneMode": "editorial" en al menos 2 escenas clave (por ejemplo datos, documentos, explicaciones, comparativas o polémicas) y "hybrid" en las escenas de impacto o narrativa visual.`,
+- Usa "sceneMode": "editorial" en al menos 2 escenas clave y "hybrid" en las escenas de impacto o narrativa visual.`,
   editorial: `MODO EDITORIAL / MOTION GRAPHICS:
 - Usa "sceneMode": "editorial" en TODAS las escenas para lograr una estética limpia de motion graphics estilo Vox/Johnny Harris con íconos dinámicos, formas animadas y tarjetas editoriales.`,
   cinematic: `MODO CINEMATOGRÁFICO:
@@ -184,10 +203,16 @@ export default async (req) => {
       voiceSpeed = 1.0,
       topicMode = "auto",
       renderMode = "hybrid",
+      studioMode = "general",
+      companyName = "UNIÓN DE PRODUCTORES DE CAÑA DE JOACHÍN",
+      flyerDuration = 6,
     } = await req.json();
 
+    const isRecruitment = studioMode === "recruitment" || topicMode === "recruitment";
     const effectiveDuration = extractRequestedDuration(prompt, durationSeconds);
-    const sceneCount = getTargetSceneCount(effectiveDuration);
+    const sceneCount = isRecruitment
+      ? Math.max(4, getTargetSceneCount(effectiveDuration))
+      : getTargetSceneCount(effectiveDuration);
     const speed = Math.min(1.5, Math.max(0.85, Number(voiceSpeed) || 1.0));
     const speechBudgetSec = Math.max(6, effectiveDuration - sceneCount * 0.9);
     const targetTotalWords = Math.max(18, Math.round(speechBudgetSec * 2.55 * speed));
@@ -208,7 +233,65 @@ export default async (req) => {
     const topicHint = TOPIC_HINTS[topicMode] || TOPIC_HINTS.auto;
     const modeHint = RENDER_MODE_HINTS[renderMode] || RENDER_MODE_HINTS.hybrid;
 
-    const systemInstruction = `Eres director creativo, guionista y director de motion graphics para videos verticales 9:16 virales en español sobre CUALQUIER temática (TikTok / Reels / YouTube Shorts).
+    const systemInstruction = isRecruitment
+      ? `Eres director creativo especialista en Employer Branding y videos verticales 9:16 de RECLUTAMIENTO LABORAL para redes sociales (TikTok, Reels, Facebook, WhatsApp Status) en español.
+Empresa que contrata: "${companyName}" (sector agroindustrial / caña de azúcar).
+${modeHint}
+
+Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
+{
+  "title": "Vacante: Nombre del puesto",
+  "theme": {
+    "primaryColor": "#008F4C",
+    "secondaryColor": "#7EC34A",
+    "accentColor": "#BCD853",
+    "bgColor": "#26282A"
+  },
+  "scenes": [
+    {
+      "id": "s1",
+      "type": "cinematic",
+      "sceneMode": "hybrid" | "editorial" | "cinematic",
+      "layout": "hero-impact" | "story-clean" | "stat-overlay" | "quote-press" | "cta-engage" | "flyer-end",
+      "cameraMotion": "impact-punch" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right",
+      "transition": "slide-left" | "slide-up" | "wipe" | "fade" | "flip",
+      "iconName": "briefcase" | "user-check" | "map-pin" | "badge-check" | "phone" | "calendar" | "building" | "check-circle" | "wrench" | "shield" | "trending-up" | "award" | "users" | "target" | "banknote" | "clock" | "sparkles",
+      "calloutText": "Etiqueta corta de 2 a 4 palabras (ej. CONTRATACIÓN INMEDIATA, PRESTACIONES DE LEY)",
+      "durationSeconds": ${avgSecPerScene},
+      "badge": "ETIQUETA BREVE",
+      "title": "TITULAR CLARO Y ATRACTIVO",
+      "subtitle": "Locución natural, cercana y profesional en español.",
+      "imagePrompt": "Detailed ENGLISH visual prompt depicting authentic modern agricultural/industrial workplace, friendly Mexican professionals, sugarcane fields, machinery, or modern office matching the exact job role, natural daylight, green and neutral gray color harmony, vertical 9:16 frame, strictly NO text, NO logos, NO borders.",
+      "fallbackImagePrompt": "Clean modern editorial illustration of the workplace and job role in green and gray tones, vertical 9:16, strictly NO text.",
+      "highlightValue": "Dato breve si aplica (ej. 100%, INMEDIATA, +BONOS)",
+      "stampText": "VACANTE ACTIVA",
+      "quoteText": "Beneficio o frase destacada si layout es quote-press",
+      "ctaText": "POSTÚLATE HOY MISMO ↓",
+      "bullets": ["Requisito o beneficio 1", "Requisito o beneficio 2"]
+    }
+  ]
+}
+
+REGLAS ESTRICTAS PARA VIDEOS DE RECLUTAMIENTO:
+1. Duración objetivo EXACTA: ${effectiveDuration} segundos.
+2. Genera EXACTAMENTE ${sceneCount} escenas en total:
+   - Las primeras ${sceneCount - 1} escenas presentan la vacante de forma dinámica y atractiva:
+     * Escena 1 ("hero-impact"): Gancho directo anunciando que ${companyName} está contratando el puesto exacto.
+     * Escenas intermedias: Alterna dinámicamente entre "story-clean", "cta-engage" (usando bullets para listar 2 requisitos o 2 beneficios clave), "stat-overlay" o "quote-press" para explicar funciones del puesto, requisitos y prestaciones sin sonar aburrido.
+   - LA ÚLTIMA ESCENA (escena #${sceneCount}) DEBE SER OBLIGATORIAMENTE:
+     * "layout": "flyer-end"
+     * "sceneMode": "editorial"
+     * "durationSeconds": ${Math.max(4, Number(flyerDuration) || 6)}
+     * "badge": "INFORMACIÓN Y CONTACTO"
+     * "title": "POSTÚLATE HOY"
+     * "subtitle": Una invitación breve y cálida de cierre (10 a 15 palabras) invitando a revisar el flyer en pantalla, tomar captura o enviar su solicitud.
+     * "imagePrompt": "" (vacío, porque el usuario cargará su flyer oficial aquí).
+3. Mantén el campo "subtitle" de las primeras ${sceneCount - 1} escenas entre ${minWordsPerScene} y ${maxWordsPerScene} palabras para respetar los ${effectiveDuration} segundos reales.
+4. Usa SIEMPRE exactamente los colores oficiales verde y gris en "theme": primaryColor "#008F4C", secondaryColor "#7EC34A", accentColor "#BCD853", bgColor "#26282A".
+5. NUNCA uses "type": "tactics" ni "split-versus".
+6. Usa "iconName" laborales relevantes ("briefcase", "user-check", "map-pin", "badge-check", "wrench", "building", "banknote", "shield", "check-circle") y "calloutText" breves y claros.
+7. En "imagePrompt" describe ambientes reales, limpios, seguros y positivos acordes al puesto (campo cañero, taller, oficina administrativa, logística, ingeniería, etc.) SIN texto ni letras en las imágenes.`
+      : `Eres director creativo, guionista y director de motion graphics para videos verticales 9:16 virales en español sobre CUALQUIER temática (TikTok / Reels / YouTube Shorts).
 ${topicHint}
 ${modeHint}
 
@@ -258,8 +341,8 @@ REGLAS ESTRICTAS DE DURACIÓN (CRÍTICO):
 
 REGLAS DE DINAMISMO VISUAL Y COHERENCIA:
 4. Usa "type": "cinematic" en casi todas las escenas. Usa "type": "tactics" ÚNICAMENTE si el usuario pide explicar explícitamente una jugada táctica deportiva en pizarra.
-5. Elige un "iconName" específico y coherente en CADA escena (ej. "file-text" o "gavel" para contratos/juicios, "banknote" para dinero/fichajes, "swords" para duelos, "globe" o "compass" para países, "clock" para historia, "brain" o "cpu" para ciencia/IA, "alert" para misterios, "trophy" o "crown" para victorias).
-6. Escribe un "calloutText" breve y llamativo (2 a 4 palabras, ej. "CLÁUSULA: 60M €", "AÑO 2000", "360,000 BÚNKERES") que refuerce lo que dice la voz a mitad de cada escena.
+5. Elige un "iconName" específico y coherente en CADA escena.
+6. Escribe un "calloutText" breve y llamativo (2 a 4 palabras) que refuerce lo que dice la voz a mitad de cada escena.
 7. Varía "layout", "cameraMotion" y "transition" entre escenas consecutivas para que el video tenga ritmo real.
 8. Adapta "theme" a la paleta cromática real del tema.
 9. "imagePrompt" SIEMPRE en inglés, muy específico, encuadre vertical 9:16 limpio con espacio arriba y abajo para títulos/subtítulos, SIN texto ni marcos dentro de la imagen.`;
@@ -269,7 +352,7 @@ REGLAS DE DINAMISMO VISUAL Y COHERENCIA:
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: "application/json",
-        temperature: 0.78,
+        temperature: isRecruitment ? 0.68 : 0.78,
         maxOutputTokens: 9000,
         ...(disableThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
       },
@@ -342,17 +425,77 @@ REGLAS DE DINAMISMO VISUAL Y COHERENCIA:
     const videoSpec = JSON.parse(cleaned);
     videoSpec.targetDuration = effectiveDuration;
     videoSpec.renderMode = renderMode;
-    videoSpec.scenes = normalizeSceneDurations(videoSpec.scenes, effectiveDuration).map(
-      (scene, idx) => ({
-        ...scene,
-        sceneMode:
-          renderMode === "editorial"
-            ? "editorial"
-            : renderMode === "cinematic"
-            ? "cinematic"
-            : scene.sceneMode || (idx % 2 === 1 ? "editorial" : "hybrid"),
-      })
-    );
+    videoSpec.studioMode = isRecruitment ? "recruitment" : "general";
+
+    let scenes = Array.isArray(videoSpec.scenes) ? videoSpec.scenes : [];
+
+    if (isRecruitment) {
+      videoSpec.theme = { ...RECRUITMENT_THEME };
+      videoSpec.showBrandHeader = true;
+      videoSpec.companyName = companyName || "UNIÓN DE PRODUCTORES DE CAÑA DE JOACHÍN";
+      videoSpec.companyBadge = "VACANTE DISPONIBLE";
+      videoSpec.companyLogoUrl = "logoasr.png";
+
+      if (scenes.length > 0 && scenes[scenes.length - 1].layout !== "flyer-end") {
+        scenes.push({
+          id: `s-flyer-${Date.now()}`,
+          type: "cinematic",
+          sceneMode: "editorial",
+          layout: "flyer-end",
+          cameraMotion: "zoom-in",
+          transition: "fade",
+          iconName: "badge-check",
+          durationSeconds: Math.max(4, Number(flyerDuration) || 6),
+          badge: "INFORMACIÓN Y CONTACTO",
+          title: "POSTÚLATE HOY",
+          subtitle:
+            "Toma captura de esta pantalla con toda la información y postúlate hoy mismo. ¡Te esperamos!",
+          imagePrompt: "",
+        });
+      }
+
+      scenes = normalizeSceneDurations(
+        scenes,
+        effectiveDuration,
+        Math.max(4, Number(flyerDuration) || 6)
+      ).map((scene, idx, arr) => {
+        const isLast = idx === arr.length - 1;
+        if (isLast) {
+          return {
+            ...scene,
+            type: "cinematic",
+            layout: "flyer-end",
+            sceneMode: "editorial",
+            imagePrompt: "",
+          };
+        }
+        return {
+          ...scene,
+          type: "cinematic",
+          sceneMode:
+            renderMode === "editorial"
+              ? "editorial"
+              : renderMode === "cinematic"
+              ? "cinematic"
+              : scene.sceneMode || (idx % 2 === 1 ? "editorial" : "hybrid"),
+        };
+      });
+    } else {
+      videoSpec.showBrandHeader = false;
+      scenes = normalizeSceneDurations(scenes, effectiveDuration).map(
+        (scene, idx) => ({
+          ...scene,
+          sceneMode:
+            renderMode === "editorial"
+              ? "editorial"
+              : renderMode === "cinematic"
+              ? "cinematic"
+              : scene.sceneMode || (idx % 2 === 1 ? "editorial" : "hybrid"),
+        })
+      );
+    }
+
+    videoSpec.scenes = scenes;
 
     return new Response(JSON.stringify(videoSpec), {
       status: 200,

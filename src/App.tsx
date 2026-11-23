@@ -17,6 +17,8 @@ import {
   Wand2,
   Video as VideoIcon,
   Layers,
+  Briefcase,
+  FileImage,
 } from "lucide-react";
 import {
   DynamicVideo,
@@ -29,6 +31,7 @@ import {
   RenderMode,
   SceneLayout,
   SceneType,
+  StudioMode,
   SubtitleStyle,
   TopicMode,
   TransitionType,
@@ -45,7 +48,16 @@ const LEAD_IN_SEC = SCENE_LEAD_IN_FRAMES / FPS;
 const DEFAULT_TAIL_PAUSE_SEC = 0.75;
 const MIN_TAIL_PAUSE_SEC = 0.4;
 
+const DEFAULT_COMPANY_NAME = "UNIÓN DE PRODUCTORES DE CAÑA DE JOACHÍN";
+const RECRUITMENT_PALETTE = {
+  primaryColor: "#008F4C",
+  secondaryColor: "#7EC34A",
+  accentColor: "#BCD853",
+  bgColor: "#26282A",
+};
+
 const DURATION_PRESETS = [15, 30, 45, 60, 90];
+const RECRUITMENT_DURATION_PRESETS = [20, 30, 45, 60];
 
 const RENDER_MODE_OPTIONS: { id: RenderMode; label: string }[] = [
   { id: "hybrid", label: "Formato: Híbrido (Imágenes/Videos + Íconos dinámicos)" },
@@ -102,6 +114,21 @@ const SPEED_OPTIONS = [
 ];
 
 const ICON_OPTIONS = [
+  { id: "briefcase", label: "Ícono: Trabajo / Vacante" },
+  { id: "user-check", label: "Ícono: Talento / Perfil" },
+  { id: "badge-check", label: "Ícono: Verificado / Oficial" },
+  { id: "check-circle", label: "Ícono: Requisitos / Check" },
+  { id: "map-pin", label: "Ícono: Ubicación" },
+  { id: "phone", label: "Ícono: Contacto / Teléfono" },
+  { id: "calendar", label: "Ícono: Horario / Fecha" },
+  { id: "building", label: "Ícono: Empresa / Oficina" },
+  { id: "wrench", label: "Ícono: Técnico / Operativo" },
+  { id: "banknote", label: "Ícono: Sueldo / Prestaciones" },
+  { id: "shield", label: "Ícono: Seguridad / Estabilidad" },
+  { id: "trending-up", label: "Ícono: Crecimiento" },
+  { id: "award", label: "Ícono: Reconocimiento" },
+  { id: "users", label: "Ícono: Equipo / Personas" },
+  { id: "target", label: "Ícono: Objetivo" },
   { id: "sparkles", label: "Ícono: Destello" },
   { id: "trophy", label: "Ícono: Trofeo" },
   { id: "crown", label: "Ícono: Corona" },
@@ -109,9 +136,8 @@ const ICON_OPTIONS = [
   { id: "file-text", label: "Ícono: Documento / Contrato" },
   { id: "gavel", label: "Ícono: Juicio / Ley" },
   { id: "scale", label: "Ícono: Balanza / Justicia" },
-  { id: "banknote", label: "Ícono: Dinero / Millones" },
   { id: "newspaper", label: "Ícono: Prensa / Noticia" },
-  { id: "megaphone", label: "Ícono: Polémica / Anuncio" },
+  { id: "megaphone", label: "Ícono: Anuncio / Aviso" },
   { id: "alert", label: "Ícono: Alerta / Misterio" },
   { id: "clock", label: "Ícono: Tiempo / Historia" },
   { id: "globe", label: "Ícono: Mundo / País" },
@@ -121,14 +147,9 @@ const ICON_OPTIONS = [
   { id: "rocket", label: "Ícono: Espacio / Despegue" },
   { id: "flame", label: "Ícono: Fuego / Épico" },
   { id: "zap", label: "Ícono: Impacto / Rayo" },
-  { id: "trending-up", label: "Ícono: Crecimiento / Récord" },
-  { id: "shield", label: "Ícono: Defensa / Escudo" },
-  { id: "target", label: "Ícono: Objetivo / Precisión" },
   { id: "lock", label: "Ícono: Secreto / Confidencial" },
   { id: "eye", label: "Ícono: Secreto revelado" },
-  { id: "users", label: "Ícono: Afición / Personas" },
-  { id: "briefcase", label: "Ícono: Despacho / Negocio" },
-  { id: "landmark", label: "Ícono: Institución / Estadio" },
+  { id: "landmark", label: "Ícono: Institución" },
   { id: "flag", label: "Ícono: Meta / Bandera" },
 ];
 
@@ -240,10 +261,11 @@ function extractRequestedDuration(
 function calcSceneDuration(
   rawAudioDuration: number,
   speed: number,
-  tailPause = DEFAULT_TAIL_PAUSE_SEC
+  tailPause = DEFAULT_TAIL_PAUSE_SEC,
+  minFloor = 2.2
 ): number {
   const total = LEAD_IN_SEC + rawAudioDuration / speed + tailPause;
-  return Number(Math.max(2.2, Math.ceil(total * 20) / 20).toFixed(2));
+  return Number(Math.max(minFloor, Math.ceil(total * 20) / 20).toFixed(2));
 }
 
 function fitScenesToTargetDuration(
@@ -255,16 +277,18 @@ function fitScenesToTargetDuration(
   const voicedCount = scenes.filter((s) => Boolean(s.rawAudioDuration)).length;
   if (voicedCount === 0) return scenes;
 
-  const baseDurations = scenes.map((s) =>
-    s.rawAudioDuration
-      ? calcSceneDuration(s.rawAudioDuration, speed, DEFAULT_TAIL_PAUSE_SEC)
-      : s.durationSeconds || 5
-  );
-  const minDurations = scenes.map((s) =>
-    s.rawAudioDuration
-      ? calcSceneDuration(s.rawAudioDuration, speed, MIN_TAIL_PAUSE_SEC)
-      : Math.max(2, s.durationSeconds || 5)
-  );
+  const baseDurations = scenes.map((s) => {
+    const floor = s.layout === "flyer-end" ? Math.max(5, s.durationSeconds || 6) : 2.2;
+    return s.rawAudioDuration
+      ? calcSceneDuration(s.rawAudioDuration, speed, DEFAULT_TAIL_PAUSE_SEC, floor)
+      : s.durationSeconds || 5;
+  });
+  const minDurations = scenes.map((s) => {
+    const floor = s.layout === "flyer-end" ? Math.max(4.5, s.durationSeconds || 5) : 2.0;
+    return s.rawAudioDuration
+      ? calcSceneDuration(s.rawAudioDuration, speed, MIN_TAIL_PAUSE_SEC, floor)
+      : Math.max(2, s.durationSeconds || 5);
+  });
 
   const baseTotal = baseDurations.reduce((a, b) => a + b, 0);
   const minTotal = minDurations.reduce((a, b) => a + b, 0);
@@ -456,7 +480,8 @@ async function fetchSceneVoice(
   voice: string,
   languageCode: string,
   style: string,
-  speed: number
+  speed: number,
+  minFloor = 2.2
 ): Promise<{
   audioUrl: string;
   rawAudioDuration: number;
@@ -491,7 +516,12 @@ async function fetchSceneVoice(
     audioUrl,
     data.durationSeconds
   );
-  const durationSeconds = calcSceneDuration(rawAudioDuration, speed);
+  const durationSeconds = calcSceneDuration(
+    rawAudioDuration,
+    speed,
+    DEFAULT_TAIL_PAUSE_SEC,
+    minFloor
+  );
 
   return {
     audioUrl,
@@ -544,6 +574,7 @@ async function fetchSceneImage(
 }
 
 export function App() {
+  const [activeTab, setActiveTab] = useState<StudioMode>("general");
   const [spec, setSpec] = useState<VideoSpec>({
     ...DEFAULT_VIDEO_SPEC,
     voiceSpeed: 1.0,
@@ -551,10 +582,31 @@ export function App() {
     renderMode: "hybrid",
     sfxEnabled: true,
     targetDuration: 35,
+    studioMode: "general",
+    showBrandHeader: false,
   });
+
+  // General mode state
   const [prompt, setPrompt] = useState("");
   const [targetDurationInput, setTargetDurationInput] = useState("35");
   const [topicMode, setTopicMode] = useState<TopicMode>("auto");
+
+  // Recruitment mode state
+  const [companyName, setCompanyName] = useState(DEFAULT_COMPANY_NAME);
+  const [companyBadge, setCompanyBadge] = useState("VACANTE DISPONIBLE");
+  const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(null);
+  const [customLogoName, setCustomLogoName] = useState<string | null>(null);
+  const [jobTitle, setJobTitle] = useState("");
+  const [jobLocation, setJobLocation] = useState("Joachín, Veracruz");
+  const [jobRequirements, setJobRequirements] = useState("");
+  const [jobBenefits, setJobBenefits] = useState("");
+  const [jobExtra, setJobExtra] = useState("");
+  const [recruitmentDurationInput, setRecruitmentDurationInput] = useState("30");
+  const [flyerDuration, setFlyerDuration] = useState(6);
+  const [flyerUrl, setFlyerUrl] = useState<string | null>(null);
+  const [flyerName, setFlyerName] = useState<string | null>(null);
+
+  // Shared production controls
   const [renderMode, setRenderMode] = useState<RenderMode>("hybrid");
   const [sfxEnabled, setSfxEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -597,6 +649,11 @@ export function App() {
     return Number.isFinite(n) && n > 0 ? clampDuration(n) : 35;
   }, [targetDurationInput]);
 
+  const parsedRecruitmentDuration = useMemo(() => {
+    const n = Number(recruitmentDurationInput);
+    return Number.isFinite(n) && n > 0 ? clampDuration(n) : 30;
+  }, [recruitmentDurationInput]);
+
   const totalFrames = useMemo(() => getTotalFrames(spec, FPS), [spec]);
   const totalSeconds = (totalFrames / FPS).toFixed(1);
 
@@ -626,17 +683,21 @@ export function App() {
     setSpec((prev) => ({
       ...prev,
       renderMode: nextMode,
-      scenes: prev.scenes.map((scene, idx) => ({
-        ...scene,
-        sceneMode:
-          nextMode === "editorial"
-            ? "editorial"
-            : nextMode === "cinematic"
-            ? "cinematic"
-            : idx % 2 === 1
-            ? "editorial"
-            : "hybrid",
-      })),
+      scenes: prev.scenes.map((scene, idx) =>
+        scene.layout === "flyer-end"
+          ? { ...scene, sceneMode: "editorial" }
+          : {
+              ...scene,
+              sceneMode:
+                nextMode === "editorial"
+                  ? "editorial"
+                  : nextMode === "cinematic"
+                  ? "cinematic"
+                  : idx % 2 === 1
+                  ? "editorial"
+                  : "hybrid",
+            }
+      ),
     }));
   };
 
@@ -666,6 +727,58 @@ export function App() {
     }));
   };
 
+  const handleFlyerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (flyerUrl && flyerUrl.startsWith("blob:")) URL.revokeObjectURL(flyerUrl);
+    const nextUrl = URL.createObjectURL(file);
+    setFlyerUrl(nextUrl);
+    setFlyerName(file.name);
+
+    setSpec((prev) => {
+      const idx = prev.scenes.findIndex((s) => s.layout === "flyer-end");
+      if (idx === -1) return prev;
+      return {
+        ...prev,
+        scenes: prev.scenes.map((scene, i) =>
+          i === idx ? { ...scene, imageUrl: nextUrl } : scene
+        ),
+      };
+    });
+  };
+
+  const handleCustomLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (customLogoUrl && customLogoUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(customLogoUrl);
+    }
+    const nextUrl = URL.createObjectURL(file);
+    setCustomLogoUrl(nextUrl);
+    setCustomLogoName(file.name);
+
+    setSpec((prev) =>
+      prev.showBrandHeader ? { ...prev, companyLogoUrl: nextUrl } : prev
+    );
+  };
+
+  const applyCorporateBrandingLive = (
+    nextName = companyName,
+    nextBadge = companyBadge
+  ) => {
+    setSpec((prev) =>
+      prev.showBrandHeader
+        ? {
+            ...prev,
+            companyName: nextName,
+            companyBadge: nextBadge,
+            companyLogoUrl: customLogoUrl || "logoasr.png",
+            theme: { ...RECRUITMENT_PALETTE },
+          }
+        : prev
+    );
+  };
+
   const generateAllVoices = async (
     targetSpec: VideoSpec,
     selectedVoice = voice,
@@ -693,13 +806,19 @@ export function App() {
         const textToSpeak = (scene.subtitle || scene.title || "").trim();
         if (!textToSpeak) continue;
 
+        const minFloor =
+          scene.layout === "flyer-end"
+            ? Math.max(4.5, scene.durationSeconds || flyerDuration)
+            : 2.2;
+
         setVoiceProgress(`Voz ${i + 1}/${updatedScenes.length}...`);
         const result = await fetchSceneVoice(
           textToSpeak,
           selectedVoice,
           selectedAccent,
           selectedStyle,
-          selectedSpeed
+          selectedSpeed,
+          minFloor
         );
         lastProvider = result.provider;
 
@@ -761,7 +880,13 @@ export function App() {
 
       for (let i = 0; i < updatedScenes.length; i++) {
         const scene = updatedScenes[i];
-        if (scene.type === "tactics" || scene.videoUrl) continue;
+        if (
+          scene.type === "tactics" ||
+          scene.videoUrl ||
+          scene.layout === "flyer-end"
+        ) {
+          continue;
+        }
         const effectiveMode = scene.sceneMode || targetSpec.renderMode || renderMode;
         if (!forceEditorial && effectiveMode === "editorial") continue;
 
@@ -809,12 +934,17 @@ export function App() {
     setVoiceError(null);
 
     try {
+      const minFloor =
+        scene.layout === "flyer-end"
+          ? Math.max(4.5, scene.durationSeconds || flyerDuration)
+          : 2.2;
       const result = await fetchSceneVoice(
         textToSpeak,
         voice,
         accent,
         voiceStyle,
-        voiceSpeed
+        voiceSpeed,
+        minFloor
       );
       setVoiceProvider(result.provider);
       if (scene.audioUrl && scene.audioUrl.startsWith("blob:")) {
@@ -836,7 +966,7 @@ export function App() {
 
   const regenerateSingleSceneImage = async (index: number) => {
     const scene = spec.scenes[index];
-    if (!scene) return;
+    if (!scene || scene.layout === "flyer-end") return;
 
     setSceneImageLoading(index);
     setImageError(null);
@@ -860,7 +990,7 @@ export function App() {
     }
   };
 
-  const handleGenerate = async (e: React.FormEvent) => {
+  const handleGenerateGeneral = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim()) return;
 
@@ -884,6 +1014,7 @@ export function App() {
           voiceSpeed,
           topicMode,
           renderMode,
+          studioMode: "general",
         }),
       });
 
@@ -914,6 +1045,8 @@ export function App() {
         subtitleStyle,
         renderMode,
         sfxEnabled,
+        studioMode: "general",
+        showBrandHeader: false,
         targetDuration: data.targetDuration || requestedSeconds,
       };
       setSpec(currentSpec);
@@ -936,6 +1069,119 @@ export function App() {
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Error de conexión con Gemini."
+      );
+    } finally {
+      setLoading(false);
+      setLoadingStep("");
+    }
+  };
+
+  const handleGenerateRecruitment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!jobTitle.trim() && !jobExtra.trim()) {
+      setError("Escribe al menos el nombre de la vacante o los detalles del puesto.");
+      return;
+    }
+
+    const requestedSeconds = parsedRecruitmentDuration;
+    const cleanCompany = companyName.trim() || DEFAULT_COMPANY_NAME;
+
+    const recruitmentPrompt = [
+      `Crea un video profesional y dinámico de reclutamiento laboral de ${requestedSeconds} segundos para la empresa ${cleanCompany}.`,
+      jobTitle.trim() ? `Vacante / Puesto: ${jobTitle.trim()}.` : "",
+      jobLocation.trim() ? `Ubicación: ${jobLocation.trim()}.` : "",
+      jobRequirements.trim() ? `Requisitos y perfil buscado: ${jobRequirements.trim()}.` : "",
+      jobBenefits.trim() ? `Ofrecemos / Beneficios: ${jobBenefits.trim()}.` : "",
+      jobExtra.trim() ? `Información adicional / Postulación: ${jobExtra.trim()}.` : "",
+      "Hazlo cercano, claro y atractivo para atraer candidatos en redes sociales, cerrando con la escena del flyer final con los datos de contacto.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    setLoading(true);
+    setLoadingStep(`Creando video de vacante (${requestedSeconds}s)...`);
+    setError(null);
+    setVoiceError(null);
+    setImageError(null);
+
+    try {
+      const res = await fetch("/api/generate-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: recruitmentPrompt,
+          durationSeconds: requestedSeconds,
+          voiceSpeed,
+          topicMode: "recruitment",
+          renderMode,
+          studioMode: "recruitment",
+          companyName: cleanCompany,
+          flyerDuration,
+        }),
+      });
+
+      const raw = await res.text();
+      let data: GenerateResponse = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error(`Error del servidor (${res.status}): ${raw.slice(0, 140)}`);
+      }
+
+      if (!res.ok) {
+        throw new Error(
+          data.error ||
+            data.errorMessage ||
+            data.message ||
+            `Error ${res.status} al generar el video de vacante.`
+        );
+      }
+
+      if (!Array.isArray(data.scenes) || data.scenes.length === 0) {
+        throw new Error("La respuesta no incluyó escenas válidas.");
+      }
+
+      const hydratedScenes = (data.scenes as VideoScene[]).map((scene) =>
+        scene.layout === "flyer-end" && flyerUrl
+          ? { ...scene, imageUrl: flyerUrl }
+          : scene
+      );
+
+      let currentSpec: VideoSpec = {
+        ...(data as VideoSpec),
+        theme: { ...RECRUITMENT_PALETTE },
+        scenes: hydratedScenes,
+        voiceSpeed,
+        subtitleStyle,
+        renderMode,
+        sfxEnabled,
+        studioMode: "recruitment",
+        showBrandHeader: true,
+        companyName: cleanCompany,
+        companyBadge: companyBadge.trim() || "VACANTE DISPONIBLE",
+        companyLogoUrl: customLogoUrl || "logoasr.png",
+        targetDuration: data.targetDuration || requestedSeconds,
+      };
+      setSpec(currentSpec);
+
+      if (autoImages && renderMode !== "editorial") {
+        setLoadingStep("Generando visuales corporativos 9:16...");
+        currentSpec = await generateAllImages(currentSpec, visualStyle, false);
+      }
+
+      if (autoVoice && !audioUrl) {
+        setLoadingStep("Generando voz de reclutamiento sincronizada...");
+        currentSpec = await generateAllVoices(
+          currentSpec,
+          voice,
+          accent,
+          voiceStyle,
+          voiceSpeed
+        );
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Error al crear el video de vacante."
       );
     } finally {
       setLoading(false);
@@ -974,6 +1220,16 @@ export function App() {
         assets[globalAudioKey] = { base64: item.base64, ext: item.ext };
       }
 
+      let companyLogoAssetKey: string | undefined;
+      let exportLogoUrl = spec.companyLogoUrl;
+      if (spec.showBrandHeader && exportLogoUrl && exportLogoUrl.startsWith("blob:")) {
+        companyLogoAssetKey = "company-logo";
+        const item = await blobUrlToAsset(exportLogoUrl, "png");
+        totalAssetBytes += item.byteSize;
+        assets[companyLogoAssetKey] = { base64: item.base64, ext: item.ext };
+        exportLogoUrl = undefined;
+      }
+
       const exportScenes: VideoScene[] = [];
       for (let i = 0; i < spec.scenes.length; i++) {
         const s = spec.scenes[i];
@@ -990,7 +1246,10 @@ export function App() {
 
         if (s.imageUrl && s.imageUrl.startsWith("blob:")) {
           const key = `scene-image-${i}`;
-          const item = await blobUrlToAsset(s.imageUrl, "jpg");
+          const item = await blobUrlToAsset(
+            s.imageUrl,
+            s.layout === "flyer-end" ? "png" : "jpg"
+          );
           totalAssetBytes += item.byteSize;
           assets[key] = { base64: item.base64, ext: item.ext };
           copy.imageAssetKey = key;
@@ -1011,7 +1270,7 @@ export function App() {
 
       if (totalAssetBytes > 18 * 1024 * 1024) {
         throw new Error(
-          `Los archivos subidos pesan ${(totalAssetBytes / (1024 * 1024)).toFixed(1)} MB. Usa clips de video más cortos o ligeros (máximo 18 MB en total) para exportar en la nube.`
+          `Los archivos subidos pesan ${(totalAssetBytes / (1024 * 1024)).toFixed(1)} MB. Usa clips o imágenes más ligeras (máximo 18 MB en total) para exportar en la nube.`
         );
       }
 
@@ -1022,6 +1281,8 @@ export function App() {
         renderMode,
         sfxEnabled,
         globalAudioKey,
+        companyLogoUrl: exportLogoUrl,
+        companyLogoAssetKey,
         scenes: exportScenes,
       };
 
@@ -1118,7 +1379,9 @@ export function App() {
     const file = e.target.files?.[0];
     if (!file) return;
     const prev = spec.scenes[index]?.imageUrl;
-    if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+    if (prev && prev.startsWith("blob:") && prev !== flyerUrl) {
+      URL.revokeObjectURL(prev);
+    }
     const url = URL.createObjectURL(file);
     updateScene(index, { type: "cinematic", imageUrl: url });
   };
@@ -1167,7 +1430,7 @@ export function App() {
       layout: "story-clean",
       cameraMotion: "zoom-in",
       transition: "slide-left",
-      iconName: "sparkles",
+      iconName: activeTab === "recruitment" ? "briefcase" : "sparkles",
       calloutText: "PUNTO CLAVE",
       durationSeconds: 5,
       badge: "NUEVA ESCENA",
@@ -1177,6 +1440,26 @@ export function App() {
         "Dramatic vertical 9:16 cinematic scene with atmospheric lighting, realistic photography",
     };
     setSpec((prev) => ({ ...prev, scenes: [...prev.scenes, newScene] }));
+  };
+
+  const addFlyerScene = () => {
+    const flyerScene: VideoScene = {
+      id: `s-flyer-${Date.now()}`,
+      type: "cinematic",
+      sceneMode: "editorial",
+      layout: "flyer-end",
+      cameraMotion: "zoom-in",
+      transition: "fade",
+      iconName: "badge-check",
+      durationSeconds: flyerDuration,
+      badge: "INFORMACIÓN Y CONTACTO",
+      title: jobTitle.trim() || "POSTÚLATE HOY",
+      subtitle:
+        "Guarda esta pantalla con toda la información y postúlate hoy mismo. ¡Te esperamos!",
+      imageUrl: flyerUrl || undefined,
+      imagePrompt: "",
+    };
+    setSpec((prev) => ({ ...prev, scenes: [...prev.scenes, flyerScene] }));
   };
 
   const removeScene = (index: number) => {
@@ -1275,7 +1558,7 @@ export function App() {
             {exportState.status === "completed" && h(CheckCircle2, { size: 16 })}
             <span>
               {exportState.status === "uploading" &&
-                "Empaquetando imágenes, videos, subtítulos y audio para renderizar..."}
+                "Empaquetando imágenes, videos, flyer, subtítulos y audio para renderizar..."}
               {exportState.status === "queued" &&
                 "Trabajo enviado a GitHub Actions. Esperando servidor de render (1-2 min)..."}
               {exportState.status === "in_progress" &&
@@ -1313,25 +1596,282 @@ export function App() {
 
       <main className="studio-grid">
         <section className="editor-panel">
-          <form className="card" onSubmit={handleGenerate}>
-            <div className="card-title">
-              {h(Sparkles, { size: 16 })}
-              <span>Crear video sobre cualquier tema</span>
-            </div>
-            <textarea
-              rows={3}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Ej: Un video de 45 segundos sobre cómo Florentino Pérez convenció a Figo de fichar por el Real Madrid, con ritmo editorial, íconos dinámicos de contratos y dinero, y pregunta final..."
-            />
+          <div className="studio-tabs">
+            <button
+              type="button"
+              className={`studio-tab ${activeTab === "general" ? "active" : ""}`}
+              onClick={() => {
+                setActiveTab("general");
+                setError(null);
+              }}
+            >
+              {h(Sparkles, { size: 15 })}
+              <span>Contenido General</span>
+            </button>
+            <button
+              type="button"
+              className={`studio-tab recruitment ${activeTab === "recruitment" ? "active" : ""}`}
+              onClick={() => {
+                setActiveTab("recruitment");
+                setError(null);
+              }}
+            >
+              {h(Briefcase, { size: 15 })}
+              <span>Reclutamiento / Vacantes</span>
+            </button>
+          </div>
 
-            <div className="voice-grid">
+          {activeTab === "general" ? (
+            <form className="card" onSubmit={handleGenerateGeneral}>
+              <div className="card-title">
+                {h(Sparkles, { size: 16 })}
+                <span>Crear video sobre cualquier tema</span>
+              </div>
+              <textarea
+                rows={3}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Ej: Un video de 45 segundos sobre cómo Florentino Pérez convenció a Figo de fichar por el Real Madrid, con ritmo editorial, íconos dinámicos de contratos y dinero, y pregunta final..."
+              />
+
+              <div className="voice-grid">
+                <select
+                  value={renderMode}
+                  onChange={(e) =>
+                    handleRenderModeChange(e.target.value as RenderMode)
+                  }
+                  className="full-span"
+                >
+                  {RENDER_MODE_OPTIONS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={topicMode}
+                  onChange={(e) => setTopicMode(e.target.value as TopicMode)}
+                  className="full-span"
+                >
+                  {TOPIC_OPTIONS.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="duration-presets">
+                {DURATION_PRESETS.map((sec) => (
+                  <button
+                    key={sec}
+                    type="button"
+                    className={`preset-chip ${parsedTargetDuration === sec ? "active" : ""}`}
+                    onClick={() => setTargetDurationInput(String(sec))}
+                  >
+                    {sec}s
+                  </button>
+                ))}
+              </div>
+
+              <div className="form-row">
+                <label className="duration-field">
+                  <span>Duración</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={targetDurationInput}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/[^0-9]/g, "");
+                      setTargetDurationInput(digits);
+                    }}
+                    onBlur={() =>
+                      setTargetDurationInput(String(parsedTargetDuration))
+                    }
+                  />
+                  <span>seg (10–180)</span>
+                </label>
+                <button type="submit" className="btn-primary" disabled={isBusy}>
+                  {isBusy
+                    ? h(Loader2, { size: 16, className: "spin" })
+                    : h(Sparkles, { size: 16 })}
+                  {loading
+                    ? imagesProgress || voiceProgress || loadingStep || "Generando..."
+                    : "Crear video"}
+                </button>
+              </div>
+              {error && <div className="error-banner">{error}</div>}
+            </form>
+          ) : (
+            <form
+              className="card recruitment-card"
+              onSubmit={handleGenerateRecruitment}
+            >
+              <div className="card-header-between">
+                <div className="card-title recruitment-title">
+                  {h(Briefcase, { size: 16 })}
+                  <span>Video de Reclutamiento · Paleta Oficial</span>
+                </div>
+                <div className="palette-swatches" title="Paleta oficial ASR (verdes y grises)">
+                  <span style={{ backgroundColor: "#008F4C" }} />
+                  <span style={{ backgroundColor: "#7EC34A" }} />
+                  <span style={{ backgroundColor: "#BCD853" }} />
+                  <span style={{ backgroundColor: "#636466" }} />
+                  <span style={{ backgroundColor: "#A7A9AC" }} />
+                </div>
+              </div>
+
+              <div className="recruitment-brand-box">
+                <div className="recruitment-grid">
+                  <input
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => {
+                      setCompanyName(e.target.value);
+                      applyCorporateBrandingLive(e.target.value, companyBadge);
+                    }}
+                    placeholder="Nombre de la empresa en el encabezado"
+                  />
+                  <input
+                    type="text"
+                    value={companyBadge}
+                    onChange={(e) => {
+                      setCompanyBadge(e.target.value);
+                      applyCorporateBrandingLive(companyName, e.target.value);
+                    }}
+                    placeholder="Etiqueta superior (ej. VACANTE DISPONIBLE)"
+                  />
+                </div>
+                <div className="audio-row">
+                  <span className="logo-status">
+                    Logo superior derecho:{" "}
+                    <strong>{customLogoName || "logoasr.png (predeterminado)"}</strong>
+                  </span>
+                  <label className="btn-secondary file-label">
+                    {h(Upload, { size: 14 })}
+                    <span>{customLogoName ? "Cambiar logo" : "Subir otro PNG"}</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/*"
+                      hidden
+                      onChange={handleCustomLogoUpload}
+                    />
+                  </label>
+                  {customLogoName && (
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title="Volver a usar logoasr.png"
+                      onClick={() => {
+                        if (customLogoUrl) URL.revokeObjectURL(customLogoUrl);
+                        setCustomLogoUrl(null);
+                        setCustomLogoName(null);
+                        setSpec((prev) =>
+                          prev.showBrandHeader
+                            ? { ...prev, companyLogoUrl: "logoasr.png" }
+                            : prev
+                        );
+                      }}
+                    >
+                      {h(Trash2, { size: 14 })}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="recruitment-grid">
+                <input
+                  type="text"
+                  value={jobTitle}
+                  onChange={(e) => setJobTitle(e.target.value)}
+                  placeholder="Puesto / Vacante (Ej: Técnico de Control Agrícola)"
+                />
+                <input
+                  type="text"
+                  value={jobLocation}
+                  onChange={(e) => setJobLocation(e.target.value)}
+                  placeholder="Ubicación (Ej: Joachín, Veracruz)"
+                />
+              </div>
+
+              <textarea
+                rows={2}
+                value={jobRequirements}
+                onChange={(e) => setJobRequirements(e.target.value)}
+                placeholder="Requisitos clave (Ej: Ingeniería agrónoma o afín, licencia de manejo, disponibilidad de horario...)"
+              />
+
+              <textarea
+                rows={2}
+                value={jobBenefits}
+                onChange={(e) => setJobBenefits(e.target.value)}
+                placeholder="Ofrecemos / Beneficios (Ej: Sueldo competitivo, prestaciones superiores a la ley, capacitación constante...)"
+              />
+
+              <input
+                type="text"
+                value={jobExtra}
+                onChange={(e) => setJobExtra(e.target.value)}
+                placeholder="Detalles extra o cómo postularse (Ej: Envía tu CV por WhatsApp o acude a oficinas de lunes a viernes)"
+              />
+
+              <div className="flyer-upload-box">
+                <div className="flyer-upload-top">
+                  <div className="card-title">
+                    {h(FileImage, { size: 16 })}
+                    <span>Flyer final de la vacante (escena de cierre)</span>
+                  </div>
+                  <label className="duration-field">
+                    <span>Tiempo</span>
+                    <input
+                      type="number"
+                      min={4}
+                      max={15}
+                      value={flyerDuration}
+                      onChange={(e) =>
+                        setFlyerDuration(
+                          Math.min(15, Math.max(4, Number(e.target.value) || 6))
+                        )
+                      }
+                    />
+                    <span>s</span>
+                  </label>
+                </div>
+
+                <div className="audio-row">
+                  <label className="btn-recruitment-outline file-label">
+                    {h(Upload, { size: 15 })}
+                    <span>
+                      {flyerName
+                        ? "Cambiar imagen del flyer"
+                        : "Cargar imagen del flyer (.png / .jpg)"}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={handleFlyerUpload}
+                    />
+                  </label>
+                  {flyerName ? (
+                    <span className="flyer-chip">
+                      {h(CheckCircle2, { size: 14 })}
+                      <span>{flyerName}</span>
+                    </span>
+                  ) : (
+                    <span className="flyer-hint">
+                      Puedes cargarlo ahora o después de generar el video.
+                    </span>
+                  )}
+                </div>
+              </div>
+
               <select
                 value={renderMode}
                 onChange={(e) =>
                   handleRenderModeChange(e.target.value as RenderMode)
                 }
-                className="full-span"
               >
                 {RENDER_MODE_OPTIONS.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -1340,60 +1880,57 @@ export function App() {
                 ))}
               </select>
 
-              <select
-                value={topicMode}
-                onChange={(e) => setTopicMode(e.target.value as TopicMode)}
-                className="full-span"
-              >
-                {TOPIC_OPTIONS.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.label}
-                  </option>
+              <div className="duration-presets">
+                {RECRUITMENT_DURATION_PRESETS.map((sec) => (
+                  <button
+                    key={sec}
+                    type="button"
+                    className={`preset-chip ${parsedRecruitmentDuration === sec ? "active" : ""}`}
+                    onClick={() => setRecruitmentDurationInput(String(sec))}
+                  >
+                    {sec}s
+                  </button>
                 ))}
-              </select>
-            </div>
+              </div>
 
-            <div className="duration-presets">
-              {DURATION_PRESETS.map((sec) => (
+              <div className="form-row">
+                <label className="duration-field">
+                  <span>Duración total</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={recruitmentDurationInput}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/[^0-9]/g, "");
+                      setRecruitmentDurationInput(digits);
+                    }}
+                    onBlur={() =>
+                      setRecruitmentDurationInput(
+                        String(parsedRecruitmentDuration)
+                      )
+                    }
+                  />
+                  <span>seg</span>
+                </label>
                 <button
-                  key={sec}
-                  type="button"
-                  className={`preset-chip ${parsedTargetDuration === sec ? "active" : ""}`}
-                  onClick={() => setTargetDurationInput(String(sec))}
+                  type="submit"
+                  className="btn-recruitment"
+                  disabled={isBusy}
                 >
-                  {sec}s
+                  {isBusy
+                    ? h(Loader2, { size: 16, className: "spin" })
+                    : h(Briefcase, { size: 16 })}
+                  {loading
+                    ? imagesProgress ||
+                      voiceProgress ||
+                      loadingStep ||
+                      "Generando..."
+                    : "Crear video de vacante"}
                 </button>
-              ))}
-            </div>
-
-            <div className="form-row">
-              <label className="duration-field">
-                <span>Duración</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={targetDurationInput}
-                  onChange={(e) => {
-                    const digits = e.target.value.replace(/[^0-9]/g, "");
-                    setTargetDurationInput(digits);
-                  }}
-                  onBlur={() =>
-                    setTargetDurationInput(String(parsedTargetDuration))
-                  }
-                />
-                <span>seg (10–180)</span>
-              </label>
-              <button type="submit" className="btn-primary" disabled={isBusy}>
-                {isBusy
-                  ? h(Loader2, { size: 16, className: "spin" })
-                  : h(Sparkles, { size: 16 })}
-                {loading
-                  ? imagesProgress || voiceProgress || loadingStep || "Generando..."
-                  : "Crear video"}
-              </button>
-            </div>
-            {error && <div className="error-banner">{error}</div>}
-          </form>
+              </div>
+              {error && <div className="error-banner">{error}</div>}
+            </form>
+          )}
 
           <div className="card">
             <div className="card-header-between">
@@ -1580,15 +2117,30 @@ export function App() {
               <div className="card-title">
                 <span>Escenas ({spec.scenes.length})</span>
               </div>
-              <button type="button" className="btn-secondary" onClick={addScene}>
-                {h(Plus, { size: 15 })}
-                Añadir escena
-              </button>
+              <div className="badge-group">
+                {activeTab === "recruitment" && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={addFlyerScene}
+                  >
+                    {h(FileImage, { size: 15 })}
+                    Añadir Flyer
+                  </button>
+                )}
+                <button type="button" className="btn-secondary" onClick={addScene}>
+                  {h(Plus, { size: 15 })}
+                  Añadir escena
+                </button>
+              </div>
             </div>
 
             <div className="scene-list">
               {spec.scenes.map((scene, index) => (
-                <div className="scene-card" key={scene.id || index}>
+                <div
+                  className={`scene-card ${scene.layout === "flyer-end" ? "flyer-scene-card" : ""}`}
+                  key={scene.id || index}
+                >
                   <div className="scene-card-top">
                     <span className="scene-index">#{index + 1}</span>
                     <select
@@ -1605,6 +2157,10 @@ export function App() {
                           updateScene(index, {
                             type: "cinematic",
                             layout: val as SceneLayout,
+                            sceneMode:
+                              val === "flyer-end"
+                                ? "editorial"
+                                : scene.sceneMode || renderMode,
                           });
                         }
                       }}
@@ -1614,7 +2170,8 @@ export function App() {
                       <option value="split-versus">Duelo / Comparativa</option>
                       <option value="stat-overlay">Dato gigante</option>
                       <option value="quote-press">Titular / Cita</option>
-                      <option value="cta-engage">Cierre / Pregunta</option>
+                      <option value="cta-engage">Lista / Beneficios / CTA</option>
+                      <option value="flyer-end">Flyer Final (Imagen completa)</option>
                       <option value="tactics">Pizarra táctica (Deportes)</option>
                     </select>
 
@@ -1652,17 +2209,19 @@ export function App() {
                     />
                     <span className="unit">s</span>
 
-                    <button
-                      type="button"
-                      className={`icon-btn ${scene.imageUrl ? "active-voice" : ""}`}
-                      title="Generar o regenerar imagen IA de esta escena"
-                      disabled={sceneImageLoading === index || imagesLoading}
-                      onClick={() => regenerateSingleSceneImage(index)}
-                    >
-                      {sceneImageLoading === index
-                        ? h(Loader2, { size: 15, className: "spin" })
-                        : h(Wand2, { size: 15 })}
-                    </button>
+                    {scene.layout !== "flyer-end" && (
+                      <button
+                        type="button"
+                        className={`icon-btn ${scene.imageUrl ? "active-voice" : ""}`}
+                        title="Generar o regenerar imagen IA de esta escena"
+                        disabled={sceneImageLoading === index || imagesLoading}
+                        onClick={() => regenerateSingleSceneImage(index)}
+                      >
+                        {sceneImageLoading === index
+                          ? h(Loader2, { size: 15, className: "spin" })
+                          : h(Wand2, { size: 15 })}
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -1676,7 +2235,11 @@ export function App() {
 
                     <label
                       className={`icon-btn ${scene.imageUrl ? "active-voice" : ""}`}
-                      title="Subir tu propia imagen/foto"
+                      title={
+                        scene.layout === "flyer-end"
+                          ? "Subir imagen del Flyer final"
+                          : "Subir tu propia imagen/foto"
+                      }
                     >
                       {h(ImageIcon, { size: 15 })}
                       <input
@@ -1687,18 +2250,20 @@ export function App() {
                       />
                     </label>
 
-                    <label
-                      className={`icon-btn ${scene.videoUrl ? "active-video" : ""}`}
-                      title="Subir tu propio video (.mp4 / .webm / .mov) para esta escena"
-                    >
-                      {h(VideoIcon, { size: 15 })}
-                      <input
-                        type="file"
-                        accept="video/*"
-                        hidden
-                        onChange={(e) => handleSceneVideoUpload(index, e)}
-                      />
-                    </label>
+                    {scene.layout !== "flyer-end" && (
+                      <label
+                        className={`icon-btn ${scene.videoUrl ? "active-video" : ""}`}
+                        title="Subir tu propio video (.mp4 / .webm / .mov) para esta escena"
+                      >
+                        {h(VideoIcon, { size: 15 })}
+                        <input
+                          type="file"
+                          accept="video/*"
+                          hidden
+                          onChange={(e) => handleSceneVideoUpload(index, e)}
+                        />
+                      </label>
+                    )}
 
                     <button
                       type="button"
@@ -1745,7 +2310,7 @@ export function App() {
                     </div>
                   )}
 
-                  {scene.type !== "tactics" && (
+                  {scene.type !== "tactics" && scene.layout !== "flyer-end" && (
                     <div className="scene-motion-row">
                       <select
                         value={scene.sceneMode || renderMode}
@@ -1807,7 +2372,7 @@ export function App() {
                     }
                     placeholder="Texto narrado y subtítulo en pantalla"
                   />
-                  {scene.type !== "tactics" && (
+                  {scene.type !== "tactics" && scene.layout !== "flyer-end" && (
                     <>
                       <input
                         type="text"
@@ -1815,7 +2380,7 @@ export function App() {
                         onChange={(e) =>
                           updateScene(index, { calloutText: e.target.value })
                         }
-                        placeholder="Etiqueta dinámica a mitad de escena (ej. CLÁUSULA: 60M €)"
+                        placeholder="Etiqueta dinámica a mitad de escena (ej. PRESTACIONES DE LEY)"
                         className="callout-input"
                       />
                       <input

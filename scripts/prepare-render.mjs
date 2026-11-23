@@ -4,7 +4,8 @@ import path from "node:path";
 const token = process.env.GITHUB_TOKEN;
 const repo = process.env.GITHUB_REPOSITORY;
 const assetId = process.env.ASSET_ID;
-const GH_API = "https" + "://api.github.com";
+const GH_HOST = ["api", "github", "com"].join(".");
+const GH_API = "https" + "://" + GH_HOST;
 
 if (!token || !repo || !assetId) {
   throw new Error("Faltan variables GITHUB_TOKEN, GITHUB_REPOSITORY o ASSET_ID.");
@@ -65,16 +66,24 @@ const mappedScenes = (spec.scenes || []).map((scene) => {
   return next;
 });
 
+const mappedSpec = {
+  ...spec,
+  scenes: mappedScenes,
+};
+
+if (mappedSpec.companyLogoAssetKey && keyToRelPath[mappedSpec.companyLogoAssetKey]) {
+  mappedSpec.companyLogoUrl = keyToRelPath[mappedSpec.companyLogoAssetKey];
+} else if (mappedSpec.companyLogoUrl && mappedSpec.companyLogoUrl.startsWith("blob:")) {
+  mappedSpec.companyLogoUrl = "logoasr.png";
+}
+
 const globalAudioUrl =
   spec.globalAudioKey && keyToRelPath[spec.globalAudioKey]
     ? keyToRelPath[spec.globalAudioKey]
     : null;
 
 const renderProps = {
-  spec: {
-    ...spec,
-    scenes: mappedScenes,
-  },
+  spec: mappedSpec,
   audioUrl: globalAudioUrl,
 };
 

@@ -13,7 +13,8 @@ export type SceneLayout =
   | "split-versus"
   | "stat-overlay"
   | "quote-press"
-  | "cta-engage";
+  | "cta-engage"
+  | "flyer-end";
 
 export type CameraMotion =
   | "impact-punch"
@@ -24,6 +25,7 @@ export type CameraMotion =
 
 export type RenderMode = "hybrid" | "editorial" | "cinematic";
 export type TransitionType = "slide-left" | "slide-up" | "wipe" | "fade" | "flip";
+export type StudioMode = "general" | "recruitment";
 
 export type SubtitleStyle = "dynamic" | "classic";
 export type VisualStyle =
@@ -32,7 +34,14 @@ export type VisualStyle =
   | "editorial3d"
   | "anime"
   | "editorial";
-export type TopicMode = "auto" | "sports" | "story" | "tech" | "viral" | "cinema";
+export type TopicMode =
+  | "auto"
+  | "sports"
+  | "story"
+  | "tech"
+  | "viral"
+  | "cinema"
+  | "recruitment";
 
 export interface VideoScene {
   id: string;
@@ -89,4 +98,10 @@ export interface VideoSpec {
   sfxEnabled?: boolean;
   targetDuration?: number;
   globalAudioKey?: string;
+  studioMode?: StudioMode;
+  showBrandHeader?: boolean;
+  companyName?: string;
+  companyBadge?: string;
+  companyLogoUrl?: string;
+  companyLogoAssetKey?: string;
 }

@@ -537,3 +537,147 @@ select:focus {
     grid-template-columns: 1fr;
   }
 }
+
+.studio-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.studio-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.65);
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.studio-tab.active {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.16);
+  color: #ffffff;
+}
+
+.studio-tab.recruitment.active {
+  border-color: #7ec34a;
+  background: linear-gradient(135deg, rgba(0, 143, 76, 0.35), rgba(126, 195, 74, 0.2));
+  color: #ffffff;
+}
+
+.recruitment-card {
+  border-color: rgba(126, 195, 74, 0.45) !important;
+}
+
+.recruitment-title {
+  color: #bcd853 !important;
+}
+
+.palette-swatches {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.palette-swatches span {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.recruitment-brand-box,
+.flyer-upload-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(38, 40, 42, 0.55);
+  border: 1px solid rgba(167, 169, 172, 0.25);
+}
+
+.recruitment-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.flyer-upload-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.logo-status,
+.flyer-hint {
+  font-size: 12px;
+  color: #a7a9ac;
+}
+
+.flyer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: rgba(0, 143, 76, 0.22);
+  border: 1px solid #7ec34a;
+  color: #d9ea9a;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.btn-recruitment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid #bcd853;
+  background: linear-gradient(135deg, #008f4c, #7ec34a);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.btn-recruitment:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-recruitment-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1px solid #7ec34a;
+  background: rgba(0, 143, 76, 0.16);
+  color: #d9ea9a;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.flyer-scene-card {
+  border-color: rgba(188, 216, 83, 0.55) !important;
+  background: rgba(0, 143, 76, 0.08) !important;
+}
+
+@media (max-width: 640px) {
+  .recruitment-grid,
+  .studio-tabs {
+    grid-template-columns: 1fr;
+  }
+}
