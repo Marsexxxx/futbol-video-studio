@@ -954,6 +954,8 @@ export function App() {
                         updateScene(index, { type: e.target.value as SceneType })
                       }
                     >
+                      <option value="illustration">Ilustración IA (SVG)</option>
+                      <option value="custom">Ilustración libre (IA)</option>
                       <option value="hook">Portada (Hook)</option>
                       <option value="tactics">Pizarra táctica</option>
                       <option value="versus">Comparativa (VS)</option>

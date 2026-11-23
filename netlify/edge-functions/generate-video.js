@@ -67,18 +67,25 @@ export default async (req) => {
 
     const models = [...new Set([primaryModel, ...fallbackList])];
 
-    const systemInstruction = `Devuelve SOLO JSON válido para un video vertical 9:16 de fútbol en español con este formato exacto:
+    const systemInstruction = `Eres director creativo e ilustrador vectorial 2D para videos verticales 9:16 de fútbol en español.
+Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
 {
   "title": "Título corto",
-  "theme": { "primaryColor": "#004D98", "secondaryColor": "#A50044", "accentColor": "#EDBB00", "bgColor": "#07111F" },
+  "theme": {
+    "primaryColor": "#004D98",
+    "secondaryColor": "#A50044",
+    "accentColor": "#EDBB00",
+    "bgColor": "#07111F"
+  },
   "scenes": [
     {
       "id": "s1",
-      "type": "hook" | "tactics" | "versus" | "headline" | "cta",
+      "type": "custom" | "hook" | "tactics" | "versus" | "headline" | "cta",
       "durationSeconds": 6,
       "badge": "ETIQUETA",
-      "title": "TITULAR",
-      "subtitle": "Subtítulo breve de máximo 14 palabras.",
+      "title": "TITULAR BREVE",
+      "subtitle": "Frase narrada de máximo 16 palabras.",
+      "svgMarkup": "<svg viewBox='0 0 800 800' xmlns='http://www.w3.org/2000/svg'>...</svg>",
       "highlightValue": "80%",
       "stampText": "CLAVE",
       "jerseyNumber": "10",
@@ -91,21 +98,32 @@ export default async (req) => {
     }
   ]
 }
-Usa entre 4 y 5 escenas que sumen cerca de ${durationSeconds} segundos. Empieza con "hook" y termina con "cta".`;
+
+REGLAS CRÍTICAS DE COHERENCIA VISUAL:
+1. Usa entre 4 y 5 escenas que sumen cerca de ${durationSeconds} segundos.
+2. NUNCA uses "tactics" (pizarrón) si el tema NO trata de táctica o movimientos en cancha.
+3. NUNCA uses "versus" (barras de porcentaje) si el tema NO compara estadísticas reales.
+4. Para historias, polémicas, casos institucionales, despachos, documentos, árbitros o personajes específicos (ej. Figo, Florentino, Negreira, directivos, periodistas, jugadores), usa type: "custom" y dibuja un "svgMarkup" fiel y detallado para cada escena.
+5. REGLAS PARA "svgMarkup" (cuando type es "custom"):
+   - Siempre usa exactamente: <svg viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">...</svg>
+   - Dibuja ilustraciones vectoriales 2D estilo cartoon editorial limpio, con contornos oscuros (stroke="#0F172A" stroke-width="6"), formas geométricas bien proporcionadas, sombras simples y colores vivos.
+   - Si hay personajes, dibuja rasgos reconocibles y expresivos: cabeza, cabello característico, gafas si aplica, cejas y boca con emoción, vestimenta acorde (traje y corbata, uniforme de árbitro, camiseta de fútbol con colores correctos) y objetos en escena (carpetas confidenciales, contratos, billetes, micrófonos, silbatos, tarjetas, estadios).
+   - No incluyas <script>, <style> ni enlaces externos. Usa comillas simples dentro de los atributos SVG para mantener el JSON limpio.
+6. La última escena puede ser "cta" (con bullets y pregunta final) o "custom" si el cierre requiere personajes.`;
 
     const buildPayload = (disableThinking) => ({
       system_instruction: { parts: [{ text: systemInstruction }] },
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: "application/json",
-        temperature: 0.7,
-        maxOutputTokens: 4096,
+        temperature: 0.75,
+        maxOutputTokens: 12000,
         ...(disableThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
       },
     });
 
     const startTime = Date.now();
-    const maxBudgetMs = 35000;
+    const maxBudgetMs = 45000;
     let lastResult = { ok: false, status: 503, data: {} };
     let usedModel = primaryModel;
 

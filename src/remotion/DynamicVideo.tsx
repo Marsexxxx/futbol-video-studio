@@ -32,6 +32,13 @@ type SubtitleChunk = {
   end: number;
 };
 
+type SceneCommonProps = {
+  scene: VideoScene;
+  theme: VideoTheme;
+  voiceSpeed: number;
+  subtitleStyle: SubtitleStyle;
+};
+
 const resolveMediaSrc = (src?: string | null): string | undefined => {
   if (!src) return undefined;
   if (
@@ -43,6 +50,20 @@ const resolveMediaSrc = (src?: string | null): string | undefined => {
     return src;
   }
   return staticFile(src);
+};
+
+const sanitizeSvg = (svg?: string): string => {
+  if (!svg) return "";
+  const cleaned = svg
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/\son\w+=(?:"[^"]*"|'[^']*')/gi, "")
+    .replace(/javascript:/gi, "")
+    .trim();
+
+  return cleaned.replace(/<svg\b([^>]*)>/i, (_match, attrs: string) => {
+    const withoutSize = attrs.replace(/\s(?:width|height)=(?:"[^"]*"|'[^']*')/gi, "");
+    return `<svg${withoutSize} width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`;
+  });
 };
 
 const buildWordChunks = (
@@ -128,11 +149,11 @@ const SceneFade: React.FC<{ children: React.ReactNode; isFirst: boolean }> = ({
     }
   );
 
-  return (
-    <AbsoluteFill style={{ opacity: Math.min(fadeIn, fadeOut) }}>
-      {children}
-    </AbsoluteFill>
-  );
+  const fadeStyle: React.CSSProperties = {
+    opacity: Math.min(fadeIn, fadeOut),
+  };
+
+  return <AbsoluteFill style={fadeStyle}>{children}</AbsoluteFill>;
 };
 
 const ClassicSubtitle: React.FC<{ text: string; accent: string }> = ({
@@ -149,31 +170,27 @@ const ClassicSubtitle: React.FC<{ text: string; accent: string }> = ({
 
   if (!text) return null;
 
-  return (
-    <div
-      style={{
-        position: "absolute",
-        bottom: 84,
-        left: 56,
-        right: 56,
-        backgroundColor: "rgba(6, 12, 24, 0.9)",
-        border: `4px solid ${accent}`,
-        borderRadius: 26,
-        padding: "26px 34px",
-        textAlign: "center",
-        fontSize: 38,
-        fontWeight: 800,
-        color: "#FFFFFF",
-        lineHeight: 1.3,
-        boxShadow: "0 16px 36px rgba(0, 0, 0, 0.45)",
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        opacity: enter,
-        transform: `translateY(${interpolate(enter, [0, 1], [18, 0])}px)`,
-      }}
-    >
-      {text}
-    </div>
-  );
+  const boxStyle: React.CSSProperties = {
+    position: "absolute",
+    bottom: 84,
+    left: 56,
+    right: 56,
+    backgroundColor: "rgba(6, 12, 24, 0.9)",
+    border: `4px solid ${accent}`,
+    borderRadius: 26,
+    padding: "26px 34px",
+    textAlign: "center",
+    fontSize: 38,
+    fontWeight: 800,
+    color: "#FFFFFF",
+    lineHeight: 1.3,
+    boxShadow: "0 16px 36px rgba(0, 0, 0, 0.45)",
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    opacity: enter,
+    transform: `translateY(${interpolate(enter, [0, 1], [18, 0])}px)`,
+  };
+
+  return <div style={boxStyle}>{text}</div>;
 };
 
 const DynamicSubtitle: React.FC<{
@@ -213,35 +230,35 @@ const DynamicSubtitle: React.FC<{
     config: { damping: 14, stiffness: 220 },
   });
 
+  const wrapperStyle: React.CSSProperties = {
+    position: "absolute",
+    bottom: 92,
+    left: 44,
+    right: 44,
+    display: "flex",
+    justifyContent: "center",
+    pointerEvents: "none",
+  };
+
+  const pillStyle: React.CSSProperties = {
+    backgroundColor: "rgba(6, 12, 24, 0.88)",
+    border: "3px solid rgba(255, 255, 255, 0.16)",
+    borderRadius: 28,
+    padding: "24px 32px",
+    display: "flex",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: "12px 16px",
+    maxWidth: "100%",
+    boxShadow: "0 18px 42px rgba(0, 0, 0, 0.55)",
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    transform: `translateY(${interpolate(chunkPop, [0, 1], [14, 0])}px) scale(${interpolate(chunkPop, [0, 1], [0.94, 1])})`,
+  };
+
   return (
-    <div
-      style={{
-        position: "absolute",
-        bottom: 92,
-        left: 44,
-        right: 44,
-        display: "flex",
-        justifyContent: "center",
-        pointerEvents: "none",
-      }}
-    >
-      <div
-        style={{
-          backgroundColor: "rgba(6, 12, 24, 0.88)",
-          border: `3px solid rgba(255, 255, 255, 0.16)`,
-          borderRadius: 28,
-          padding: "24px 32px",
-          display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "center",
-          alignItems: "center",
-          gap: "12px 16px",
-          maxWidth: "100%",
-          boxShadow: "0 18px 42px rgba(0, 0, 0, 0.55)",
-          fontFamily: "system-ui, -apple-system, sans-serif",
-          transform: `translateY(${interpolate(chunkPop, [0, 1], [14, 0])}px) scale(${interpolate(chunkPop, [0, 1], [0.94, 1])})`,
-        }}
-      >
+    <div style={wrapperStyle}>
+      <div style={pillStyle}>
         {activeChunk.words.map((word, idx) => {
           const isCurrent = frame >= word.start && frame < word.end;
           const isSpoken = frame >= word.end;
@@ -253,31 +270,28 @@ const DynamicSubtitle: React.FC<{
               })
             : 0;
 
+          const wordStyle: React.CSSProperties = {
+            display: "inline-block",
+            fontSize: 48,
+            fontWeight: 900,
+            letterSpacing: -0.5,
+            lineHeight: 1.15,
+            padding: "6px 16px",
+            borderRadius: 14,
+            backgroundColor: isCurrent ? accent : "transparent",
+            color: isCurrent
+              ? "#07111F"
+              : isSpoken
+              ? "#FFFFFF"
+              : "rgba(255, 255, 255, 0.55)",
+            transform: isCurrent
+              ? `scale(${interpolate(wordSpring, [0, 1], [0.92, 1.08])})`
+              : "scale(1)",
+            textShadow: isCurrent ? "none" : "0 4px 12px rgba(0, 0, 0, 0.65)",
+          };
+
           return (
-            <span
-              key={`${activeChunkIndex}-${idx}`}
-              style={{
-                display: "inline-block",
-                fontSize: 48,
-                fontWeight: 900,
-                letterSpacing: -0.5,
-                lineHeight: 1.15,
-                padding: "6px 16px",
-                borderRadius: 14,
-                backgroundColor: isCurrent ? accent : "transparent",
-                color: isCurrent
-                  ? "#07111F"
-                  : isSpoken
-                  ? "#FFFFFF"
-                  : "rgba(255, 255, 255, 0.55)",
-                transform: isCurrent
-                  ? `scale(${interpolate(wordSpring, [0, 1], [0.92, 1.08])})`
-                  : "scale(1)",
-                textShadow: isCurrent
-                  ? "none"
-                  : "0 4px 12px rgba(0, 0, 0, 0.65)",
-              }}
-            >
+            <span key={`${activeChunkIndex}-${idx}`} style={wordStyle}>
               {word.text}
             </span>
           );
@@ -305,11 +319,97 @@ const SceneSubtitle: React.FC<{
   );
 };
 
-type SceneCommonProps = {
-  scene: VideoScene;
-  theme: VideoTheme;
-  voiceSpeed: number;
-  subtitleStyle: SubtitleStyle;
+const SceneCustom: React.FC<SceneCommonProps> = ({
+  scene,
+  theme,
+  voiceSpeed,
+  subtitleStyle,
+}) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const pop = spring({ frame, fps, config: { damping: 14, stiffness: 120 } });
+  const floatY = Math.sin(frame * 0.055) * 8;
+  const imgSrc = resolveMediaSrc(scene.imageUrl);
+  const safeSvg = sanitizeSvg(scene.svgMarkup);
+
+  const containerStyle: React.CSSProperties = {
+    background: `linear-gradient(160deg, ${theme.primaryColor} 0%, ${theme.bgColor} 58%, ${theme.secondaryColor} 100%)`,
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    color: "#FFFFFF",
+    alignItems: "center",
+    padding: "96px 56px",
+  };
+
+  const badgeStyle: React.CSSProperties = {
+    padding: "10px 28px",
+    borderRadius: 999,
+    backgroundColor: "rgba(0, 0, 0, 0.42)",
+    border: `3px solid ${theme.accentColor}`,
+    color: theme.accentColor,
+    fontSize: 26,
+    fontWeight: 900,
+    letterSpacing: 4,
+    marginBottom: 22,
+    opacity: pop,
+  };
+
+  const titleStyle: React.CSSProperties = {
+    fontSize: 64,
+    fontWeight: 900,
+    textAlign: "center",
+    lineHeight: 1.06,
+    margin: "0 0 34px 0",
+    textShadow: "0 8px 24px rgba(0,0,0,0.45)",
+    transform: `scale(${interpolate(pop, [0, 1], [0.92, 1])})`,
+  };
+
+  const stageStyle: React.CSSProperties = {
+    width: 820,
+    height: 820,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transform: `translateY(${floatY}px) scale(${interpolate(pop, [0, 1], [0.88, 1])})`,
+    opacity: pop,
+    filter: "drop-shadow(0 24px 44px rgba(0,0,0,0.48))",
+  };
+
+  const imgStyle: React.CSSProperties = {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    borderRadius: 28,
+  };
+
+  const svgContainerStyle: React.CSSProperties = {
+    width: "100%",
+    height: "100%",
+  };
+
+  return (
+    <AbsoluteFill style={containerStyle}>
+      <div style={badgeStyle}>{scene.badge}</div>
+      <h2 style={titleStyle}>{scene.title}</h2>
+
+      <div style={stageStyle}>
+        {imgSrc ? (
+          <Img src={imgSrc} style={imgStyle} />
+        ) : safeSvg ? (
+          <div
+            style={svgContainerStyle}
+            dangerouslySetInnerHTML={{ __html: safeSvg }}
+          />
+        ) : null}
+      </div>
+
+      <SceneSubtitle
+        scene={scene}
+        accent={theme.accentColor}
+        voiceSpeed={voiceSpeed}
+        subtitleStyle={subtitleStyle}
+      />
+    </AbsoluteFill>
+  );
 };
 
 const SceneHook: React.FC<SceneCommonProps> = ({
@@ -324,16 +424,24 @@ const SceneHook: React.FC<SceneCommonProps> = ({
   const floatY = Math.sin(frame * 0.06) * 8;
   const imgSrc = resolveMediaSrc(scene.imageUrl);
 
+  const containerStyle: React.CSSProperties = {
+    background: `linear-gradient(155deg, ${theme.primaryColor} 0%, ${theme.bgColor} 58%, ${theme.secondaryColor} 100%)`,
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    color: "#FFFFFF",
+    alignItems: "center",
+    padding: "110px 64px",
+  };
+
+  const imgStyle: React.CSSProperties = {
+    width: 560,
+    height: 560,
+    objectFit: "contain",
+    borderRadius: 32,
+    filter: "drop-shadow(0 24px 40px rgba(0,0,0,0.5))",
+  };
+
   return (
-    <AbsoluteFill
-      style={{
-        background: `linear-gradient(155deg, ${theme.primaryColor} 0%, ${theme.bgColor} 58%, ${theme.secondaryColor} 100%)`,
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        color: "#FFFFFF",
-        alignItems: "center",
-        padding: "110px 64px",
-      }}
-    >
+    <AbsoluteFill style={containerStyle}>
       <div
         style={{
           padding: "12px 32px",
@@ -368,16 +476,7 @@ const SceneHook: React.FC<SceneCommonProps> = ({
 
       <div style={{ transform: `translateY(${floatY}px)` }}>
         {imgSrc ? (
-          <Img
-            src={imgSrc}
-            style={{
-              width: 560,
-              height: 560,
-              objectFit: "contain",
-              borderRadius: 32,
-              filter: "drop-shadow(0 24px 40px rgba(0,0,0,0.5))",
-            }}
-          />
+          <Img src={imgSrc} style={imgStyle} />
         ) : (
           <svg width="420" height="450" viewBox="0 0 320 350">
             <path
@@ -499,16 +598,16 @@ const SceneTactics: React.FC<SceneCommonProps> = ({
     { label: scene.jerseyNumber || "19", x: p19X, y: p19Y },
   ];
 
+  const containerStyle: React.CSSProperties = {
+    backgroundColor: theme.bgColor,
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    color: "#FFFFFF",
+    padding: "86px 56px",
+    alignItems: "center",
+  };
+
   return (
-    <AbsoluteFill
-      style={{
-        backgroundColor: theme.bgColor,
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        color: "#FFFFFF",
-        padding: "86px 56px",
-        alignItems: "center",
-      }}
-    >
+    <AbsoluteFill style={containerStyle}>
       <div style={{ fontSize: 26, fontWeight: 800, color: theme.accentColor, letterSpacing: 4 }}>
         {scene.badge}
       </div>
@@ -600,15 +699,22 @@ const SceneVersus: React.FC<SceneCommonProps> = ({
     easing: Easing.out(Easing.cubic),
   });
 
+  const containerStyle: React.CSSProperties = {
+    background: `linear-gradient(170deg, #0D172A 0%, ${theme.bgColor} 100%)`,
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    color: "#FFFFFF",
+    padding: "110px 60px",
+  };
+
+  const imgStyle: React.CSSProperties = {
+    width: 420,
+    height: 340,
+    objectFit: "contain",
+    borderRadius: 24,
+  };
+
   return (
-    <AbsoluteFill
-      style={{
-        background: `linear-gradient(170deg, #0D172A 0%, ${theme.bgColor} 100%)`,
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        color: "#FFFFFF",
-        padding: "110px 60px",
-      }}
-    >
+    <AbsoluteFill style={containerStyle}>
       <div style={{ textAlign: "center", marginBottom: 56 }}>
         <div style={{ fontSize: 28, fontWeight: 800, color: theme.accentColor, letterSpacing: 4 }}>
           {scene.badge}
@@ -620,10 +726,7 @@ const SceneVersus: React.FC<SceneCommonProps> = ({
 
       {imgSrc && (
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 40 }}>
-          <Img
-            src={imgSrc}
-            style={{ width: 420, height: 340, objectFit: "contain", borderRadius: 24 }}
-          />
+          <Img src={imgSrc} style={imgStyle} />
         </div>
       )}
 
@@ -687,16 +790,24 @@ const SceneHeadline: React.FC<SceneCommonProps> = ({
   const stampPop = spring({ frame: Math.max(0, frame - 24), fps, config: { damping: 11, stiffness: 190 } });
   const imgSrc = resolveMediaSrc(scene.imageUrl);
 
+  const containerStyle: React.CSSProperties = {
+    background: `linear-gradient(160deg, #0D172A 0%, ${theme.bgColor} 65%, ${theme.secondaryColor} 100%)`,
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    color: "#FFFFFF",
+    padding: "110px 60px",
+    alignItems: "center",
+  };
+
+  const imgStyle: React.CSSProperties = {
+    width: 320,
+    height: 320,
+    objectFit: "contain",
+    marginBottom: 24,
+    borderRadius: 20,
+  };
+
   return (
-    <AbsoluteFill
-      style={{
-        background: `linear-gradient(160deg, #0D172A 0%, ${theme.bgColor} 65%, ${theme.secondaryColor} 100%)`,
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        color: "#FFFFFF",
-        padding: "110px 60px",
-        alignItems: "center",
-      }}
-    >
+    <AbsoluteFill style={containerStyle}>
       <div style={{ fontSize: 28, fontWeight: 800, color: theme.accentColor, letterSpacing: 4 }}>
         {scene.badge}
       </div>
@@ -718,12 +829,7 @@ const SceneHeadline: React.FC<SceneCommonProps> = ({
           textAlign: "center",
         }}
       >
-        {imgSrc && (
-          <Img
-            src={imgSrc}
-            style={{ width: 320, height: 320, objectFit: "contain", marginBottom: 24, borderRadius: 20 }}
-          />
-        )}
+        {imgSrc && <Img src={imgSrc} style={imgStyle} />}
 
         <div style={{ fontSize: 132, fontWeight: 900, color: theme.primaryColor, lineHeight: 1 }}>
           {scene.highlightValue || "100%"}
@@ -770,15 +876,15 @@ const SceneCta: React.FC<SceneCommonProps> = ({
   const { fps } = useVideoConfig();
   const ctaPop = spring({ frame: Math.max(0, frame - 18), fps, config: { damping: 14 } });
 
+  const containerStyle: React.CSSProperties = {
+    background: `linear-gradient(165deg, ${theme.primaryColor} 0%, ${theme.bgColor} 58%, ${theme.secondaryColor} 100%)`,
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    color: "#FFFFFF",
+    padding: "110px 60px",
+  };
+
   return (
-    <AbsoluteFill
-      style={{
-        background: `linear-gradient(165deg, ${theme.primaryColor} 0%, ${theme.bgColor} 58%, ${theme.secondaryColor} 100%)`,
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        color: "#FFFFFF",
-        padding: "110px 60px",
-      }}
-    >
+    <AbsoluteFill style={containerStyle}>
       <div style={{ textAlign: "center", marginBottom: 46 }}>
         <div style={{ fontSize: 28, fontWeight: 800, color: theme.accentColor, letterSpacing: 4 }}>
           {scene.badge}
@@ -872,10 +978,14 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
   const subtitleStyle: SubtitleStyle = spec.subtitleStyle || "dynamic";
   const resolvedGlobalAudio = resolveMediaSrc(audioUrl);
 
+  const rootStyle: React.CSSProperties = {
+    backgroundColor: theme.bgColor,
+  };
+
   let cursor = 0;
 
   return (
-    <AbsoluteFill style={{ backgroundColor: theme.bgColor }}>
+    <AbsoluteFill style={rootStyle}>
       {resolvedGlobalAudio ? <Audio src={resolvedGlobalAudio} /> : null}
       {spec.scenes.map((scene, index) => {
         const durationInFrames = Math.max(
@@ -887,16 +997,25 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
         const resolvedSceneAudio = resolveMediaSrc(scene.audioUrl);
 
         return (
-          <Sequence key={scene.id || index} from={from} durationInFrames={durationInFrames}>
+          <Sequence
+            key={scene.id || index}
+            from={from}
+            durationInFrames={durationInFrames}
+          >
             {!resolvedGlobalAudio && resolvedSceneAudio ? (
               <Sequence from={SCENE_LEAD_IN_FRAMES}>
-                <Audio
-                  src={resolvedSceneAudio}
-                  playbackRate={voiceSpeed}
-                />
+                <Audio src={resolvedSceneAudio} playbackRate={voiceSpeed} />
               </Sequence>
             ) : null}
             <SceneFade isFirst={index === 0}>
+              {scene.type === "custom" && (
+                <SceneCustom
+                  scene={scene}
+                  theme={theme}
+                  voiceSpeed={voiceSpeed}
+                  subtitleStyle={subtitleStyle}
+                />
+              )}
               {scene.type === "hook" && (
                 <SceneHook
                   scene={scene}

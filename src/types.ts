@@ -1,4 +1,4 @@
-export type SceneType = "hook" | "tactics" | "versus" | "headline" | "cta";
+export type SceneType = "custom" | "hook" | "tactics" | "versus" | "headline" | "cta";
 export type SubtitleStyle = "dynamic" | "classic";
 
 export interface VideoScene {
@@ -18,6 +18,7 @@ export interface VideoScene {
   bullets?: string[];
   tacticCaption?: string;
   imageUrl?: string;
+  svgMarkup?: string;
   audioUrl?: string;
   rawAudioDuration?: number;
   audioAssetKey?: string;
