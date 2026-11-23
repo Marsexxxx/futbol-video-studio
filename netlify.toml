@@ -12,6 +12,10 @@
   function = "generate-tts"
 
 [[edge_functions]]
+  path = "/api/generate-image"
+  function = "generate-image"
+
+[[edge_functions]]
   path = "/api/export-video"
   function = "export-video"
 

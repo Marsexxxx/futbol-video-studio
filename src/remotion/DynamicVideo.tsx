@@ -11,7 +11,16 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import { SubtitleStyle, VideoScene, VideoSpec, VideoTheme } from "../types";
+import {
+  CameraMotion,
+  SceneLayout,
+  SubtitleStyle,
+  VideoScene,
+  VideoSpec,
+  VideoTheme,
+} from "../types";
+
+const h = React.createElement;
 
 export const SCENE_LEAD_IN_FRAMES = 6;
 
@@ -37,6 +46,7 @@ type SceneCommonProps = {
   theme: VideoTheme;
   voiceSpeed: number;
   subtitleStyle: SubtitleStyle;
+  sceneIndex: number;
 };
 
 const resolveMediaSrc = (src?: string | null): string | undefined => {
@@ -50,20 +60,6 @@ const resolveMediaSrc = (src?: string | null): string | undefined => {
     return src;
   }
   return staticFile(src);
-};
-
-const sanitizeSvg = (svg?: string): string => {
-  if (!svg) return "";
-  const cleaned = svg
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/\son\w+=(?:"[^"]*"|'[^']*')/gi, "")
-    .replace(/javascript:/gi, "")
-    .trim();
-
-  return cleaned.replace(/<svg\b([^>]*)>/i, (_match, attrs: string) => {
-    const withoutSize = attrs.replace(/\s(?:width|height)=(?:"[^"]*"|'[^']*')/gi, "");
-    return `<svg${withoutSize} width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`;
-  });
 };
 
 const buildWordChunks = (
@@ -99,7 +95,8 @@ const buildWordChunks = (
   let bucketChars = 0;
 
   for (const item of timedWords) {
-    const nextChars = bucketChars + item.text.length + (bucket.length > 0 ? 1 : 0);
+    const nextChars =
+      bucketChars + item.text.length + (bucket.length > 0 ? 1 : 0);
     if (bucket.length > 0 && (bucket.length >= 4 || nextChars > 24)) {
       chunks.push({
         words: bucket,
@@ -125,18 +122,26 @@ const buildWordChunks = (
   return chunks;
 };
 
-const SceneFade: React.FC<{ children: React.ReactNode; isFirst: boolean }> = ({
-  children,
-  isFirst,
-}) => {
+const SceneTransition: React.FC<{
+  children?: React.ReactNode;
+  isFirst: boolean;
+}> = ({ children, isFirst }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
 
   const fadeIn = isFirst
     ? 1
-    : interpolate(frame, [0, 6], [0, 1], {
+    : interpolate(frame, [0, 7], [0, 1], {
         extrapolateLeft: "clamp",
         extrapolateRight: "clamp",
+      });
+
+  const entryScale = isFirst
+    ? 1
+    : interpolate(frame, [0, 10], [1.05, 1], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+        easing: Easing.out(Easing.cubic),
       });
 
   const fadeOut = interpolate(
@@ -149,11 +154,16 @@ const SceneFade: React.FC<{ children: React.ReactNode; isFirst: boolean }> = ({
     }
   );
 
-  const fadeStyle: React.CSSProperties = {
-    opacity: Math.min(fadeIn, fadeOut),
-  };
-
-  return <AbsoluteFill style={fadeStyle}>{children}</AbsoluteFill>;
+  return h(
+    AbsoluteFill,
+    {
+      style: {
+        opacity: Math.min(fadeIn, fadeOut),
+        transform: `scale(${entryScale})`,
+      },
+    },
+    children
+  );
 };
 
 const ClassicSubtitle: React.FC<{ text: string; accent: string }> = ({
@@ -170,27 +180,31 @@ const ClassicSubtitle: React.FC<{ text: string; accent: string }> = ({
 
   if (!text) return null;
 
-  const boxStyle: React.CSSProperties = {
-    position: "absolute",
-    bottom: 84,
-    left: 56,
-    right: 56,
-    backgroundColor: "rgba(6, 12, 24, 0.9)",
-    border: `4px solid ${accent}`,
-    borderRadius: 26,
-    padding: "26px 34px",
-    textAlign: "center",
-    fontSize: 38,
-    fontWeight: 800,
-    color: "#FFFFFF",
-    lineHeight: 1.3,
-    boxShadow: "0 16px 36px rgba(0, 0, 0, 0.45)",
-    fontFamily: "system-ui, -apple-system, sans-serif",
-    opacity: enter,
-    transform: `translateY(${interpolate(enter, [0, 1], [18, 0])}px)`,
-  };
-
-  return <div style={boxStyle}>{text}</div>;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        bottom: 94,
+        left: 52,
+        right: 52,
+        backgroundColor: "rgba(5, 10, 20, 0.82)",
+        borderLeft: `8px solid ${accent}`,
+        borderRadius: 20,
+        padding: "24px 30px",
+        textAlign: "center",
+        fontSize: 38,
+        fontWeight: 800,
+        color: "#FFFFFF",
+        lineHeight: 1.28,
+        boxShadow: "0 16px 38px rgba(0, 0, 0, 0.5)",
+        fontFamily: "system-ui, -apple-system, sans-serif",
+        opacity: enter,
+        transform: `translateY(${interpolate(enter, [0, 1], [18, 0])}px)`,
+      }}
+    >
+      {text}
+    </div>
+  );
 };
 
 const DynamicSubtitle: React.FC<{
@@ -230,35 +244,30 @@ const DynamicSubtitle: React.FC<{
     config: { damping: 14, stiffness: 220 },
   });
 
-  const wrapperStyle: React.CSSProperties = {
-    position: "absolute",
-    bottom: 92,
-    left: 44,
-    right: 44,
-    display: "flex",
-    justifyContent: "center",
-    pointerEvents: "none",
-  };
-
-  const pillStyle: React.CSSProperties = {
-    backgroundColor: "rgba(6, 12, 24, 0.88)",
-    border: "3px solid rgba(255, 255, 255, 0.16)",
-    borderRadius: 28,
-    padding: "24px 32px",
-    display: "flex",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: "12px 16px",
-    maxWidth: "100%",
-    boxShadow: "0 18px 42px rgba(0, 0, 0, 0.55)",
-    fontFamily: "system-ui, -apple-system, sans-serif",
-    transform: `translateY(${interpolate(chunkPop, [0, 1], [14, 0])}px) scale(${interpolate(chunkPop, [0, 1], [0.94, 1])})`,
-  };
-
   return (
-    <div style={wrapperStyle}>
-      <div style={pillStyle}>
+    <div
+      style={{
+        position: "absolute",
+        bottom: 112,
+        left: 42,
+        right: 42,
+        display: "flex",
+        justifyContent: "center",
+        pointerEvents: "none",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: "10px 14px",
+          maxWidth: "100%",
+          fontFamily: "system-ui, -apple-system, sans-serif",
+          transform: `translateY(${interpolate(chunkPop, [0, 1], [14, 0])}px) scale(${interpolate(chunkPop, [0, 1], [0.94, 1])})`,
+        }}
+      >
         {activeChunk.words.map((word, idx) => {
           const isCurrent = frame >= word.start && frame < word.end;
           const isSpoken = frame >= word.end;
@@ -266,32 +275,38 @@ const DynamicSubtitle: React.FC<{
             ? spring({
                 frame: Math.max(0, frame - Math.floor(word.start)),
                 fps,
-                config: { damping: 12, stiffness: 260 },
+                config: { damping: 12, stiffness: 280 },
               })
             : 0;
 
-          const wordStyle: React.CSSProperties = {
-            display: "inline-block",
-            fontSize: 48,
-            fontWeight: 900,
-            letterSpacing: -0.5,
-            lineHeight: 1.15,
-            padding: "6px 16px",
-            borderRadius: 14,
-            backgroundColor: isCurrent ? accent : "transparent",
-            color: isCurrent
-              ? "#07111F"
-              : isSpoken
-              ? "#FFFFFF"
-              : "rgba(255, 255, 255, 0.55)",
-            transform: isCurrent
-              ? `scale(${interpolate(wordSpring, [0, 1], [0.92, 1.08])})`
-              : "scale(1)",
-            textShadow: isCurrent ? "none" : "0 4px 12px rgba(0, 0, 0, 0.65)",
-          };
-
           return (
-            <span key={`${activeChunkIndex}-${idx}`} style={wordStyle}>
+            <span
+              key={`${activeChunkIndex}-${idx}`}
+              style={{
+                display: "inline-block",
+                fontSize: 54,
+                fontWeight: 900,
+                letterSpacing: -0.6,
+                lineHeight: 1.12,
+                padding: isCurrent ? "6px 18px" : "6px 8px",
+                borderRadius: 16,
+                backgroundColor: isCurrent ? accent : "rgba(6, 12, 24, 0.55)",
+                color: isCurrent
+                  ? "#07111F"
+                  : isSpoken
+                  ? "#FFFFFF"
+                  : "rgba(255, 255, 255, 0.72)",
+                transform: isCurrent
+                  ? `scale(${interpolate(wordSpring, [0, 1], [0.9, 1.1])})`
+                  : "scale(1)",
+                textShadow: isCurrent
+                  ? "none"
+                  : "0 4px 16px rgba(0, 0, 0, 0.9)",
+                boxShadow: isCurrent
+                  ? "0 10px 26px rgba(0, 0, 0, 0.45)"
+                  : "none",
+              }}
+            >
               {word.text}
             </span>
           );
@@ -308,216 +323,652 @@ const SceneSubtitle: React.FC<{
   subtitleStyle: SubtitleStyle;
 }> = ({ scene, accent, voiceSpeed, subtitleStyle }) => {
   if (subtitleStyle === "classic") {
-    return <ClassicSubtitle text={scene.subtitle} accent={accent} />;
+    return h(ClassicSubtitle, { text: scene.subtitle, accent });
   }
-  return (
-    <DynamicSubtitle
-      scene={scene}
-      accent={accent}
-      voiceSpeed={voiceSpeed}
-    />
-  );
+  return h(DynamicSubtitle, { scene, accent, voiceSpeed });
 };
 
-const SceneCustom: React.FC<SceneCommonProps> = ({
-  scene,
-  theme,
-  voiceSpeed,
-  subtitleStyle,
-}) => {
+const AnimatedBackdrop: React.FC<{
+  imgSrc?: string;
+  theme: VideoTheme;
+  motion: CameraMotion;
+  sceneIndex: number;
+}> = ({ imgSrc, theme, motion, sceneIndex }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const pop = spring({ frame, fps, config: { damping: 14, stiffness: 120 } });
-  const floatY = Math.sin(frame * 0.055) * 8;
-  const imgSrc = resolveMediaSrc(scene.imageUrl);
-  const safeSvg = sanitizeSvg(scene.svgMarkup);
+  const { durationInFrames } = useVideoConfig();
+  const progress = interpolate(frame, [0, Math.max(1, durationInFrames)], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
 
-  const containerStyle: React.CSSProperties = {
-    background: `linear-gradient(160deg, ${theme.primaryColor} 0%, ${theme.bgColor} 58%, ${theme.secondaryColor} 100%)`,
-    fontFamily: "system-ui, -apple-system, sans-serif",
-    color: "#FFFFFF",
-    alignItems: "center",
-    padding: "96px 56px",
-  };
+  let scale = 1.08;
+  let tx = 0;
+  let ty = 0;
 
-  const badgeStyle: React.CSSProperties = {
-    padding: "10px 28px",
-    borderRadius: 999,
-    backgroundColor: "rgba(0, 0, 0, 0.42)",
-    border: `3px solid ${theme.accentColor}`,
-    color: theme.accentColor,
-    fontSize: 26,
-    fontWeight: 900,
-    letterSpacing: 4,
-    marginBottom: 22,
-    opacity: pop,
-  };
+  if (motion === "zoom-in") {
+    scale = interpolate(progress, [0, 1], [1.02, 1.18]);
+    ty = interpolate(progress, [0, 1], [0, -18]);
+  } else if (motion === "zoom-out") {
+    scale = interpolate(progress, [0, 1], [1.2, 1.03]);
+    ty = interpolate(progress, [0, 1], [-14, 10]);
+  } else if (motion === "pan-left") {
+    scale = 1.15;
+    tx = interpolate(progress, [0, 1], [48, -48]);
+  } else if (motion === "pan-right") {
+    scale = 1.15;
+    tx = interpolate(progress, [0, 1], [-48, 48]);
+  } else if (motion === "impact-punch") {
+    const punch = interpolate(frame, [0, 12], [1.24, 1.06], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+      easing: Easing.out(Easing.exp),
+    });
+    const slowDrift = interpolate(progress, [0, 1], [0, 0.08]);
+    scale = punch + slowDrift;
+    tx = frame < 10 ? Math.sin(frame * 2.8) * (10 - frame) * 1.4 : 0;
+    ty = frame < 10 ? Math.cos(frame * 2.2) * (10 - frame) * 1.1 : 0;
+  }
 
-  const titleStyle: React.CSSProperties = {
-    fontSize: 64,
-    fontWeight: 900,
-    textAlign: "center",
-    lineHeight: 1.06,
-    margin: "0 0 34px 0",
-    textShadow: "0 8px 24px rgba(0,0,0,0.45)",
-    transform: `scale(${interpolate(pop, [0, 1], [0.92, 1])})`,
-  };
+  const flashOpacity =
+    motion === "impact-punch"
+      ? interpolate(frame, [0, 9], [0.5, 0], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        })
+      : 0;
 
-  const stageStyle: React.CSSProperties = {
-    width: 820,
-    height: 820,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    transform: `translateY(${floatY}px) scale(${interpolate(pop, [0, 1], [0.88, 1])})`,
-    opacity: pop,
-    filter: "drop-shadow(0 24px 44px rgba(0,0,0,0.48))",
-  };
+  const sweepX = interpolate(progress, [0, 1], [-500, 1450]);
+  const orbX = 240 + Math.sin(frame * 0.03 + sceneIndex) * 180;
+  const orbY = 620 + Math.cos(frame * 0.025 + sceneIndex) * 140;
 
-  const imgStyle: React.CSSProperties = {
-    width: "100%",
-    height: "100%",
-    objectFit: "contain",
-    borderRadius: 28,
-  };
-
-  const svgContainerStyle: React.CSSProperties = {
-    width: "100%",
-    height: "100%",
-  };
-
-  return (
-    <AbsoluteFill style={containerStyle}>
-      <div style={badgeStyle}>{scene.badge}</div>
-      <h2 style={titleStyle}>{scene.title}</h2>
-
-      <div style={stageStyle}>
-        {imgSrc ? (
-          <Img src={imgSrc} style={imgStyle} />
-        ) : safeSvg ? (
-          <div
-            style={svgContainerStyle}
-            dangerouslySetInnerHTML={{ __html: safeSvg }}
-          />
-        ) : null}
-      </div>
-
-      <SceneSubtitle
-        scene={scene}
-        accent={theme.accentColor}
-        voiceSpeed={voiceSpeed}
-        subtitleStyle={subtitleStyle}
-      />
-    </AbsoluteFill>
-  );
-};
-
-const SceneHook: React.FC<SceneCommonProps> = ({
-  scene,
-  theme,
-  voiceSpeed,
-  subtitleStyle,
-}) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const pop = spring({ frame, fps, config: { damping: 14 } });
-  const floatY = Math.sin(frame * 0.06) * 8;
-  const imgSrc = resolveMediaSrc(scene.imageUrl);
-
-  const containerStyle: React.CSSProperties = {
-    background: `linear-gradient(155deg, ${theme.primaryColor} 0%, ${theme.bgColor} 58%, ${theme.secondaryColor} 100%)`,
-    fontFamily: "system-ui, -apple-system, sans-serif",
-    color: "#FFFFFF",
-    alignItems: "center",
-    padding: "110px 64px",
-  };
-
-  const imgStyle: React.CSSProperties = {
-    width: 560,
-    height: 560,
-    objectFit: "contain",
-    borderRadius: 32,
-    filter: "drop-shadow(0 24px 40px rgba(0,0,0,0.5))",
-  };
-
-  return (
-    <AbsoluteFill style={containerStyle}>
+  return h(
+    AbsoluteFill,
+    {
+      style: {
+        backgroundColor: theme.bgColor,
+        overflow: "hidden",
+      },
+    },
+    imgSrc
+      ? h(Img, {
+          src: imgSrc,
+          style: {
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`,
+          },
+        })
+      : h(AbsoluteFill, {
+          style: {
+            background: `radial-gradient(circle at ${orbX}px ${orbY}px, ${theme.primaryColor} 0%, ${theme.bgColor} 58%, ${theme.secondaryColor} 100%)`,
+            transform: `scale(${scale})`,
+          },
+        }),
+    h(AbsoluteFill, {
+      style: {
+        background:
+          "linear-gradient(180deg, rgba(4,9,20,0.78) 0%, rgba(4,9,20,0.18) 28%, rgba(4,9,20,0.06) 54%, rgba(4,9,20,0.86) 100%)",
+      },
+    }),
+    <div
+      style={{
+        position: "absolute",
+        top: -200,
+        left: sweepX,
+        width: 240,
+        height: 2400,
+        background:
+          "linear-gradient(90deg, transparent, rgba(255,255,255,0.09), transparent)",
+        transform: "rotate(18deg)",
+        pointerEvents: "none",
+      }}
+    />,
+    <div
+      style={{
+        position: "absolute",
+        top: 28,
+        left: 44,
+        right: 44,
+        height: 6,
+        borderRadius: 999,
+        backgroundColor: "rgba(255,255,255,0.22)",
+        overflow: "hidden",
+      }}
+    >
       <div
         style={{
-          padding: "12px 32px",
-          borderRadius: 999,
-          backgroundColor: "rgba(0, 0, 0, 0.45)",
-          border: `3px solid ${theme.accentColor}`,
-          color: theme.accentColor,
-          fontSize: 28,
-          fontWeight: 900,
-          letterSpacing: 4,
-          marginBottom: 34,
-          opacity: pop,
+          width: `${progress * 100}%`,
+          height: "100%",
+          backgroundColor: theme.accentColor,
         }}
-      >
-        {scene.badge}
-      </div>
-
-      <h1
-        style={{
-          fontSize: 94,
-          fontWeight: 900,
-          textAlign: "center",
-          lineHeight: 1.02,
-          margin: "0 0 64px 0",
-          letterSpacing: -2,
-          textShadow: "0 10px 28px rgba(0,0,0,0.45)",
-          transform: `scale(${interpolate(pop, [0, 1], [0.88, 1])})`,
-        }}
-      >
-        {scene.title}
-      </h1>
-
-      <div style={{ transform: `translateY(${floatY}px)` }}>
-        {imgSrc ? (
-          <Img src={imgSrc} style={imgStyle} />
-        ) : (
-          <svg width="420" height="450" viewBox="0 0 320 350">
-            <path
-              d="M 54 310 L 72 95 L 118 58 L 202 58 L 248 95 L 266 310 Z"
-              fill={theme.primaryColor}
-              stroke="#0F172A"
-              strokeWidth="10"
-              strokeLinejoin="round"
-            />
-            <rect x="114" y="64" width="38" height="240" fill={theme.secondaryColor} />
-            <rect x="176" y="64" width="38" height="240" fill={theme.secondaryColor} />
-            <path
-              d="M 118 58 Q 160 104 202 58"
-              fill={theme.accentColor}
-              stroke="#0F172A"
-              strokeWidth="8"
-            />
-            <text
-              x="160"
-              y="224"
-              textAnchor="middle"
-              fontSize="124"
-              fontWeight="900"
-              fill={theme.accentColor}
-              stroke="#0F172A"
-              strokeWidth="5"
-              fontFamily="Impact, sans-serif"
-            >
-              {scene.jerseyNumber || "10"}
-            </text>
-          </svg>
-        )}
-      </div>
-
-      <SceneSubtitle
-        scene={scene}
-        accent={theme.accentColor}
-        voiceSpeed={voiceSpeed}
-        subtitleStyle={subtitleStyle}
       />
-    </AbsoluteFill>
+    </div>,
+    flashOpacity > 0
+      ? h(AbsoluteFill, {
+          style: {
+            backgroundColor: "#FFFFFF",
+            opacity: flashOpacity,
+            pointerEvents: "none",
+          },
+        })
+      : null
+  );
+};
+
+const inferLayout = (scene: VideoScene): SceneLayout => {
+  if (scene.layout) return scene.layout;
+  if (scene.type === "hook") return "hero-impact";
+  if (scene.type === "versus") return "split-versus";
+  if (scene.type === "headline") return "stat-overlay";
+  if (scene.type === "cta") return "cta-engage";
+  return "story-clean";
+};
+
+const inferMotion = (scene: VideoScene, index: number): CameraMotion => {
+  if (scene.cameraMotion) return scene.cameraMotion;
+  const cycle: CameraMotion[] = [
+    "impact-punch",
+    "zoom-in",
+    "pan-right",
+    "zoom-out",
+    "pan-left",
+  ];
+  return cycle[index % cycle.length];
+};
+
+const SceneCinematic: React.FC<SceneCommonProps> = ({
+  scene,
+  theme,
+  voiceSpeed,
+  subtitleStyle,
+  sceneIndex,
+}) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const layout = inferLayout(scene);
+  const motion = inferMotion(scene, sceneIndex);
+  const imgSrc = resolveMediaSrc(scene.imageUrl);
+
+  const titleSpring = spring({
+    frame: Math.max(0, frame - 2),
+    fps,
+    config: { damping: 14, stiffness: 170 },
+  });
+  const detailSpring = spring({
+    frame: Math.max(0, frame - 14),
+    fps,
+    config: { damping: 13, stiffness: 180 },
+  });
+
+  const leftTarget = Math.min(100, Math.max(1, scene.leftValue ?? 50));
+  const rightTarget = Math.min(100, Math.max(1, scene.rightValue ?? 50));
+  const leftAnim = interpolate(frame, [12, 54], [0, leftTarget], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
+  const rightAnim = interpolate(frame, [12, 54], [0, rightTarget], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
+
+  return h(
+    AbsoluteFill,
+    {
+      style: {
+        fontFamily: "system-ui, -apple-system, sans-serif",
+        color: "#FFFFFF",
+      },
+    },
+    h(AnimatedBackdrop, { imgSrc, theme, motion, sceneIndex }),
+    layout === "hero-impact" ? (
+      <div
+        style={{
+          position: "absolute",
+          top: 86,
+          left: 52,
+          right: 52,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          textAlign: "center",
+        }}
+      >
+        <div
+          style={{
+            padding: "10px 28px",
+            borderRadius: 999,
+            backgroundColor: theme.secondaryColor,
+            color: "#FFFFFF",
+            fontSize: 26,
+            fontWeight: 900,
+            letterSpacing: 4,
+            marginBottom: 22,
+            boxShadow: "0 10px 26px rgba(0,0,0,0.45)",
+            opacity: titleSpring,
+            transform: `translateY(${interpolate(titleSpring, [0, 1], [-24, 0])}px)`,
+          }}
+        >
+          {scene.badge}
+        </div>
+        <h1
+          style={{
+            margin: 0,
+            fontSize: 88,
+            fontWeight: 900,
+            lineHeight: 0.98,
+            letterSpacing: -2,
+            textTransform: "uppercase",
+            textShadow: "0 10px 32px rgba(0,0,0,0.85)",
+            transform: `scale(${interpolate(titleSpring, [0, 1], [1.18, 1])})`,
+            opacity: titleSpring,
+          }}
+        >
+          {scene.title}
+        </h1>
+        <div
+          style={{
+            marginTop: 22,
+            height: 8,
+            width: interpolate(detailSpring, [0, 1], [0, 260]),
+            borderRadius: 999,
+            backgroundColor: theme.accentColor,
+            boxShadow: `0 0 24px ${theme.accentColor}`,
+          }}
+        />
+      </div>
+    ) : null,
+    layout === "story-clean" ? (
+      <div
+        style={{
+          position: "absolute",
+          top: 82,
+          left: 52,
+          right: 52,
+        }}
+      >
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "8px 22px",
+            borderRadius: 12,
+            backgroundColor: "rgba(6, 12, 24, 0.72)",
+            borderLeft: `6px solid ${theme.accentColor}`,
+            color: theme.accentColor,
+            fontSize: 24,
+            fontWeight: 900,
+            letterSpacing: 3,
+            marginBottom: 18,
+            opacity: titleSpring,
+            transform: `translateX(${interpolate(titleSpring, [0, 1], [-36, 0])}px)`,
+          }}
+        >
+          {scene.badge}
+        </div>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: 64,
+            fontWeight: 900,
+            lineHeight: 1.05,
+            textShadow: "0 8px 28px rgba(0,0,0,0.9)",
+            opacity: titleSpring,
+            transform: `translateY(${interpolate(titleSpring, [0, 1], [24, 0])}px)`,
+          }}
+        >
+          {scene.title}
+        </h2>
+      </div>
+    ) : null,
+    layout === "split-versus" ? (
+      <>
+        <div
+          style={{
+            position: "absolute",
+            top: 78,
+            left: 48,
+            right: 48,
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              display: "inline-block",
+              padding: "8px 24px",
+              borderRadius: 999,
+              backgroundColor: "rgba(0,0,0,0.65)",
+              border: `2px solid ${theme.accentColor}`,
+              color: theme.accentColor,
+              fontSize: 24,
+              fontWeight: 900,
+              letterSpacing: 4,
+              marginBottom: 14,
+            }}
+          >
+            {scene.badge}
+          </div>
+          <h2
+            style={{
+              margin: 0,
+              fontSize: 64,
+              fontWeight: 900,
+              lineHeight: 1.04,
+              textShadow: "0 8px 26px rgba(0,0,0,0.9)",
+            }}
+          >
+            {scene.title}
+          </h2>
+        </div>
+
+        <div
+          style={{
+            position: "absolute",
+            bottom: 340,
+            left: 48,
+            right: 48,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 18,
+            opacity: detailSpring,
+            transform: `translateY(${interpolate(detailSpring, [0, 1], [30, 0])}px)`,
+          }}
+        >
+          <div
+            style={{
+              flex: 1,
+              background: `linear-gradient(135deg, ${theme.primaryColor}E6, rgba(7,17,31,0.88))`,
+              borderBottom: `6px solid ${theme.accentColor}`,
+              borderRadius: 20,
+              padding: "20px 24px",
+            }}
+          >
+            <div style={{ fontSize: 30, fontWeight: 900, textTransform: "uppercase" }}>
+              {scene.leftLabel || "A"}
+            </div>
+            {typeof scene.leftValue === "number" && (
+              <div style={{ fontSize: 52, fontWeight: 900, color: theme.accentColor }}>
+                {Math.round(leftAnim)}
+              </div>
+            )}
+          </div>
+
+          <div
+            style={{
+              width: 82,
+              height: 82,
+              borderRadius: 999,
+              backgroundColor: theme.accentColor,
+              color: "#07111F",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 34,
+              fontWeight: 900,
+              boxShadow: "0 12px 30px rgba(0,0,0,0.6)",
+            }}
+          >
+            VS
+          </div>
+
+          <div
+            style={{
+              flex: 1,
+              background: `linear-gradient(135deg, ${theme.secondaryColor}E6, rgba(7,17,31,0.88))`,
+              borderBottom: "6px solid #FFFFFF",
+              borderRadius: 20,
+              padding: "20px 24px",
+              textAlign: "right",
+            }}
+          >
+            <div style={{ fontSize: 30, fontWeight: 900, textTransform: "uppercase" }}>
+              {scene.rightLabel || "B"}
+            </div>
+            {typeof scene.rightValue === "number" && (
+              <div style={{ fontSize: 52, fontWeight: 900, color: "#FFFFFF" }}>
+                {Math.round(rightAnim)}
+              </div>
+            )}
+          </div>
+        </div>
+      </>
+    ) : null,
+    layout === "stat-overlay" ? (
+      <>
+        <div style={{ position: "absolute", top: 82, left: 52, right: 52 }}>
+          <div
+            style={{
+              color: theme.accentColor,
+              fontSize: 26,
+              fontWeight: 900,
+              letterSpacing: 4,
+              textShadow: "0 4px 16px rgba(0,0,0,0.9)",
+            }}
+          >
+            {scene.badge}
+          </div>
+          <h2
+            style={{
+              margin: "10px 0 0 0",
+              fontSize: 64,
+              fontWeight: 900,
+              lineHeight: 1.05,
+              textShadow: "0 8px 26px rgba(0,0,0,0.9)",
+            }}
+          >
+            {scene.title}
+          </h2>
+        </div>
+
+        <div
+          style={{
+            position: "absolute",
+            bottom: 350,
+            left: 52,
+            right: 52,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            opacity: detailSpring,
+            transform: `scale(${interpolate(detailSpring, [0, 1], [0.75, 1])})`,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 156,
+              fontWeight: 900,
+              lineHeight: 0.95,
+              color: theme.accentColor,
+              textShadow: "0 14px 40px rgba(0,0,0,0.95)",
+              letterSpacing: -4,
+            }}
+          >
+            {scene.highlightValue || "100%"}
+          </div>
+          {scene.stampText && (
+            <div
+              style={{
+                marginTop: 14,
+                padding: "10px 30px",
+                borderRadius: 12,
+                backgroundColor: theme.secondaryColor,
+                color: "#FFFFFF",
+                fontSize: 34,
+                fontWeight: 900,
+                letterSpacing: 4,
+                transform: "rotate(-2.5deg)",
+                boxShadow: "0 14px 32px rgba(0,0,0,0.55)",
+              }}
+            >
+              {scene.stampText}
+            </div>
+          )}
+        </div>
+      </>
+    ) : null,
+    layout === "quote-press" ? (
+      <>
+        <div style={{ position: "absolute", top: 82, left: 52, right: 52 }}>
+          <div
+            style={{
+              display: "inline-block",
+              padding: "8px 22px",
+              borderRadius: 8,
+              backgroundColor: "#DC2626",
+              color: "#FFFFFF",
+              fontSize: 24,
+              fontWeight: 900,
+              letterSpacing: 3,
+              marginBottom: 16,
+            }}
+          >
+            {scene.badge || "ÚLTIMA HORA"}
+          </div>
+          <h2
+            style={{
+              margin: 0,
+              fontSize: 64,
+              fontWeight: 900,
+              lineHeight: 1.04,
+              textShadow: "0 8px 28px rgba(0,0,0,0.9)",
+            }}
+          >
+            {scene.title}
+          </h2>
+        </div>
+
+        {scene.quoteText && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: 350,
+              left: 52,
+              right: 52,
+              backgroundColor: "rgba(7, 17, 31, 0.82)",
+              borderLeft: `10px solid ${theme.accentColor}`,
+              borderRadius: 20,
+              padding: "26px 32px",
+              fontSize: 36,
+              fontWeight: 800,
+              lineHeight: 1.25,
+              boxShadow: "0 18px 40px rgba(0,0,0,0.6)",
+              opacity: detailSpring,
+              transform: `translateX(${interpolate(detailSpring, [0, 1], [-45, 0])}px)`,
+            }}
+          >
+            “{scene.quoteText}”
+          </div>
+        )}
+      </>
+    ) : null,
+    layout === "cta-engage" ? (
+      <>
+        <div
+          style={{
+            position: "absolute",
+            top: 90,
+            left: 52,
+            right: 52,
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              color: theme.accentColor,
+              fontSize: 26,
+              fontWeight: 900,
+              letterSpacing: 4,
+              marginBottom: 14,
+            }}
+          >
+            {scene.badge}
+          </div>
+          <h2
+            style={{
+              margin: 0,
+              fontSize: 72,
+              fontWeight: 900,
+              lineHeight: 1.04,
+              textShadow: "0 10px 30px rgba(0,0,0,0.9)",
+            }}
+          >
+            {scene.title}
+          </h2>
+        </div>
+
+        <div
+          style={{
+            position: "absolute",
+            bottom: 350,
+            left: 52,
+            right: 52,
+            display: "flex",
+            flexDirection: "column",
+            gap: 18,
+            opacity: detailSpring,
+            transform: `translateY(${interpolate(detailSpring, [0, 1], [28, 0])}px)`,
+          }}
+        >
+          {(scene.bullets || []).slice(0, 2).map((b, i) => (
+            <div
+              key={i}
+              style={{
+                backgroundColor: "rgba(7, 17, 31, 0.8)",
+                border: `3px solid ${i === 0 ? theme.accentColor : "rgba(255,255,255,0.4)"}`,
+                borderRadius: 22,
+                padding: "22px 28px",
+                fontSize: 34,
+                fontWeight: 800,
+                display: "flex",
+                alignItems: "center",
+                gap: 18,
+              }}
+            >
+              <span
+                style={{
+                  minWidth: 48,
+                  height: 48,
+                  borderRadius: 12,
+                  backgroundColor: theme.accentColor,
+                  color: "#07111F",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 900,
+                }}
+              >
+                {i + 1}
+              </span>
+              <span>{b}</span>
+            </div>
+          ))}
+          <div
+            style={{
+              backgroundColor: theme.accentColor,
+              color: "#07111F",
+              borderRadius: 24,
+              padding: "26px 30px",
+              textAlign: "center",
+              fontSize: 40,
+              fontWeight: 900,
+              boxShadow: "0 16px 36px rgba(0,0,0,0.55)",
+            }}
+          >
+            OPINA EN LOS COMENTARIOS ↓
+          </div>
+        </div>
+      </>
+    ) : null,
+    h(SceneSubtitle, {
+      scene,
+      accent: theme.accentColor,
+      voiceSpeed,
+      subtitleStyle,
+    })
   );
 };
 
@@ -598,371 +1049,79 @@ const SceneTactics: React.FC<SceneCommonProps> = ({
     { label: scene.jerseyNumber || "19", x: p19X, y: p19Y },
   ];
 
-  const containerStyle: React.CSSProperties = {
-    backgroundColor: theme.bgColor,
-    fontFamily: "system-ui, -apple-system, sans-serif",
-    color: "#FFFFFF",
-    padding: "86px 56px",
-    alignItems: "center",
-  };
+  return h(
+    AbsoluteFill,
+    {
+      style: {
+        backgroundColor: theme.bgColor,
+        fontFamily: "system-ui, -apple-system, sans-serif",
+        color: "#FFFFFF",
+        padding: "86px 56px",
+        alignItems: "center",
+      },
+    },
+    <div style={{ fontSize: 26, fontWeight: 800, color: theme.accentColor, letterSpacing: 4 }}>
+      {scene.badge}
+    </div>,
+    <h2 style={{ fontSize: 58, fontWeight: 900, textAlign: "center", margin: "12px 0 34px 0" }}>
+      {scene.title}
+    </h2>,
+    <svg
+      viewBox="0 0 900 840"
+      style={{
+        width: 940,
+        height: 880,
+        borderRadius: 32,
+        backgroundColor: "#0E2D22",
+        border: "4px solid rgba(255,255,255,0.16)",
+      }}
+    >
+      <rect x="40" y="40" width="820" height="760" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="4" />
+      <rect x="210" y="40" width="480" height="220" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="4" />
+      <rect x="330" y="40" width="240" height="86" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="4" />
+      <rect x="385" y="18" width="130" height="22" fill="rgba(255,255,255,0.22)" stroke="#FFFFFF" strokeWidth="3" />
 
-  return (
-    <AbsoluteFill style={containerStyle}>
-      <div style={{ fontSize: 26, fontWeight: 800, color: theme.accentColor, letterSpacing: 4 }}>
-        {scene.badge}
-      </div>
-      <h2 style={{ fontSize: 58, fontWeight: 900, textAlign: "center", margin: "12px 0 34px 0" }}>
-        {scene.title}
-      </h2>
+      <line x1={p6X} y1={p6Y} x2={p8X} y2={p8Y} stroke="#60A5FA" strokeWidth="6" strokeDasharray="260" strokeDashoffset={pass1} />
+      <line x1={p8X} y1={p8Y} x2={p19X} y2={p19Y} stroke={theme.accentColor} strokeWidth="7" strokeDasharray="340" strokeDashoffset={pass2} />
+      <line x1={p19X} y1={p19Y} x2={465} y2={95} stroke="#F43F5E" strokeWidth="8" strokeDasharray="240" strokeDashoffset={shot} />
 
-      <svg
-        viewBox="0 0 900 840"
-        style={{
-          width: 940,
-          height: 880,
-          borderRadius: 32,
-          backgroundColor: "#0E2D22",
-          border: "4px solid rgba(255,255,255,0.16)",
-        }}
-      >
-        <rect x="40" y="40" width="820" height="760" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="4" />
-        <rect x="210" y="40" width="480" height="220" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="4" />
-        <rect x="330" y="40" width="240" height="86" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="4" />
-        <rect x="385" y="18" width="130" height="22" fill="rgba(255,255,255,0.22)" stroke="#FFFFFF" strokeWidth="3" />
+      {defenders.map((d, i) => (
+        <circle key={i} cx={d.x} cy={d.y} r="27" fill="#E2E8F0" stroke="#0F172A" strokeWidth="4" />
+      ))}
 
-        <line x1={p6X} y1={p6Y} x2={p8X} y2={p8Y} stroke="#60A5FA" strokeWidth="6" strokeDasharray="260" strokeDashoffset={pass1} />
-        <line x1={p8X} y1={p8Y} x2={p19X} y2={p19Y} stroke={theme.accentColor} strokeWidth="7" strokeDasharray="340" strokeDashoffset={pass2} />
-        <line x1={p19X} y1={p19Y} x2={465} y2={95} stroke="#F43F5E" strokeWidth="8" strokeDasharray="240" strokeDashoffset={shot} />
+      {attackers.map((pItem) => (
+        <g key={pItem.label}>
+          <circle cx={pItem.x} cy={pItem.y} r="34" fill={theme.primaryColor} stroke={theme.secondaryColor} strokeWidth="6" />
+          <text x={pItem.x} y={pItem.y + 10} textAnchor="middle" fill="#FFFFFF" fontSize="27" fontWeight="900">
+            {pItem.label}
+          </text>
+        </g>
+      ))}
 
-        {defenders.map((d, i) => (
-          <circle key={i} cx={d.x} cy={d.y} r="27" fill="#E2E8F0" stroke="#0F172A" strokeWidth="4" />
-        ))}
-
-        {attackers.map((pItem) => (
-          <g key={pItem.label}>
-            <circle cx={pItem.x} cy={pItem.y} r="34" fill={theme.primaryColor} stroke={theme.secondaryColor} strokeWidth="6" />
-            <text x={pItem.x} y={pItem.y + 10} textAnchor="middle" fill="#FFFFFF" fontSize="27" fontWeight="900">
-              {pItem.label}
-            </text>
-          </g>
-        ))}
-
-        <circle cx={ballX} cy={ballY} r="14" fill="#FFFFFF" stroke="#0F172A" strokeWidth="3" />
-      </svg>
-
-      {scene.tacticCaption && (
-        <div
-          style={{
-            marginTop: 28,
-            width: "100%",
-            backgroundColor: "rgba(255,255,255,0.06)",
-            borderLeft: `8px solid ${theme.secondaryColor}`,
-            borderRadius: 18,
-            padding: "22px 28px",
-            fontSize: 32,
-            fontWeight: 700,
-          }}
-        >
-          {scene.tacticCaption}
-        </div>
-      )}
-
-      <SceneSubtitle
-        scene={scene}
-        accent={theme.accentColor}
-        voiceSpeed={voiceSpeed}
-        subtitleStyle={subtitleStyle}
-      />
-    </AbsoluteFill>
-  );
-};
-
-const SceneVersus: React.FC<SceneCommonProps> = ({
-  scene,
-  theme,
-  voiceSpeed,
-  subtitleStyle,
-}) => {
-  const frame = useCurrentFrame();
-  const leftTarget = Math.min(100, Math.max(5, scene.leftValue ?? 65));
-  const rightTarget = Math.min(100, Math.max(5, scene.rightValue ?? 35));
-  const imgSrc = resolveMediaSrc(scene.imageUrl);
-
-  const leftVal = interpolate(frame, [12, 62], [0, leftTarget], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: Easing.out(Easing.cubic),
-  });
-  const rightVal = interpolate(frame, [12, 62], [0, rightTarget], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: Easing.out(Easing.cubic),
-  });
-
-  const containerStyle: React.CSSProperties = {
-    background: `linear-gradient(170deg, #0D172A 0%, ${theme.bgColor} 100%)`,
-    fontFamily: "system-ui, -apple-system, sans-serif",
-    color: "#FFFFFF",
-    padding: "110px 60px",
-  };
-
-  const imgStyle: React.CSSProperties = {
-    width: 420,
-    height: 340,
-    objectFit: "contain",
-    borderRadius: 24,
-  };
-
-  return (
-    <AbsoluteFill style={containerStyle}>
-      <div style={{ textAlign: "center", marginBottom: 56 }}>
-        <div style={{ fontSize: 28, fontWeight: 800, color: theme.accentColor, letterSpacing: 4 }}>
-          {scene.badge}
-        </div>
-        <h2 style={{ fontSize: 66, fontWeight: 900, margin: "14px 0 0 0", lineHeight: 1.08 }}>
-          {scene.title}
-        </h2>
-      </div>
-
-      {imgSrc && (
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 40 }}>
-          <Img src={imgSrc} style={imgStyle} />
-        </div>
-      )}
-
+      <circle cx={ballX} cy={ballY} r="14" fill="#FFFFFF" stroke="#0F172A" strokeWidth="3" />
+    </svg>,
+    scene.tacticCaption ? (
       <div
         style={{
-          backgroundColor: "rgba(255,255,255,0.06)",
-          border: "2px solid rgba(255,255,255,0.14)",
-          borderRadius: 32,
-          padding: "46px 40px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 42,
-        }}
-      >
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 34, fontWeight: 800, marginBottom: 16 }}>
-            <span>{scene.leftLabel || "Opción A"}</span>
-            <span style={{ color: theme.accentColor }}>{Math.round(leftVal)}%</span>
-          </div>
-          <div style={{ height: 54, backgroundColor: "rgba(0,0,0,0.45)", borderRadius: 16, overflow: "hidden" }}>
-            <div
-              style={{
-                width: `${leftVal}%`,
-                height: "100%",
-                background: `linear-gradient(90deg, ${theme.primaryColor}, ${theme.secondaryColor})`,
-              }}
-            />
-          </div>
-        </div>
-
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 34, fontWeight: 800, color: "#CBD5E1", marginBottom: 16 }}>
-            <span>{scene.rightLabel || "Opción B"}</span>
-            <span>{Math.round(rightVal)}%</span>
-          </div>
-          <div style={{ height: 54, backgroundColor: "rgba(0,0,0,0.45)", borderRadius: 16, overflow: "hidden" }}>
-            <div style={{ width: `${rightVal}%`, height: "100%", backgroundColor: "#64748B" }} />
-          </div>
-        </div>
-      </div>
-
-      <SceneSubtitle
-        scene={scene}
-        accent={theme.accentColor}
-        voiceSpeed={voiceSpeed}
-        subtitleStyle={subtitleStyle}
-      />
-    </AbsoluteFill>
-  );
-};
-
-const SceneHeadline: React.FC<SceneCommonProps> = ({
-  scene,
-  theme,
-  voiceSpeed,
-  subtitleStyle,
-}) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const cardIn = spring({ frame, fps, config: { damping: 14 } });
-  const stampPop = spring({ frame: Math.max(0, frame - 24), fps, config: { damping: 11, stiffness: 190 } });
-  const imgSrc = resolveMediaSrc(scene.imageUrl);
-
-  const containerStyle: React.CSSProperties = {
-    background: `linear-gradient(160deg, #0D172A 0%, ${theme.bgColor} 65%, ${theme.secondaryColor} 100%)`,
-    fontFamily: "system-ui, -apple-system, sans-serif",
-    color: "#FFFFFF",
-    padding: "110px 60px",
-    alignItems: "center",
-  };
-
-  const imgStyle: React.CSSProperties = {
-    width: 320,
-    height: 320,
-    objectFit: "contain",
-    marginBottom: 24,
-    borderRadius: 20,
-  };
-
-  return (
-    <AbsoluteFill style={containerStyle}>
-      <div style={{ fontSize: 28, fontWeight: 800, color: theme.accentColor, letterSpacing: 4 }}>
-        {scene.badge}
-      </div>
-      <h2 style={{ fontSize: 66, fontWeight: 900, textAlign: "center", margin: "14px 0 54px 0", lineHeight: 1.06 }}>
-        {scene.title}
-      </h2>
-
-      <div
-        style={{
-          position: "relative",
+          marginTop: 28,
           width: "100%",
-          backgroundColor: "#F8FAFC",
-          color: "#0F172A",
-          borderRadius: 34,
-          padding: "56px 46px",
-          boxShadow: "0 24px 60px rgba(0,0,0,0.45)",
-          transform: `translateY(${interpolate(cardIn, [0, 1], [60, 0])}px)`,
-          opacity: cardIn,
-          textAlign: "center",
+          backgroundColor: "rgba(255,255,255,0.06)",
+          borderLeft: `8px solid ${theme.secondaryColor}`,
+          borderRadius: 18,
+          padding: "22px 28px",
+          fontSize: 32,
+          fontWeight: 700,
         }}
       >
-        {imgSrc && <Img src={imgSrc} style={imgStyle} />}
-
-        <div style={{ fontSize: 132, fontWeight: 900, color: theme.primaryColor, lineHeight: 1 }}>
-          {scene.highlightValue || "100%"}
-        </div>
-
-        {scene.stampText && (
-          <div
-            style={{
-              display: "inline-block",
-              marginTop: 28,
-              border: `6px solid ${theme.secondaryColor}`,
-              color: theme.secondaryColor,
-              padding: "10px 28px",
-              borderRadius: 14,
-              fontSize: 36,
-              fontWeight: 900,
-              letterSpacing: 3,
-              transform: `rotate(-4deg) scale(${interpolate(stampPop, [0, 1], [1.6, 1])})`,
-              opacity: stampPop,
-            }}
-          >
-            {scene.stampText}
-          </div>
-        )}
+        {scene.tacticCaption}
       </div>
-
-      <SceneSubtitle
-        scene={scene}
-        accent={theme.accentColor}
-        voiceSpeed={voiceSpeed}
-        subtitleStyle={subtitleStyle}
-      />
-    </AbsoluteFill>
-  );
-};
-
-const SceneCta: React.FC<SceneCommonProps> = ({
-  scene,
-  theme,
-  voiceSpeed,
-  subtitleStyle,
-}) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const ctaPop = spring({ frame: Math.max(0, frame - 18), fps, config: { damping: 14 } });
-
-  const containerStyle: React.CSSProperties = {
-    background: `linear-gradient(165deg, ${theme.primaryColor} 0%, ${theme.bgColor} 58%, ${theme.secondaryColor} 100%)`,
-    fontFamily: "system-ui, -apple-system, sans-serif",
-    color: "#FFFFFF",
-    padding: "110px 60px",
-  };
-
-  return (
-    <AbsoluteFill style={containerStyle}>
-      <div style={{ textAlign: "center", marginBottom: 46 }}>
-        <div style={{ fontSize: 28, fontWeight: 800, color: theme.accentColor, letterSpacing: 4 }}>
-          {scene.badge}
-        </div>
-        <h2 style={{ fontSize: 68, fontWeight: 900, margin: "14px 0 0 0", lineHeight: 1.06 }}>
-          {scene.title}
-        </h2>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 24, marginBottom: 48 }}>
-        {(scene.bullets || []).map((bullet, idx) => {
-          const itemIn = spring({
-            frame: Math.max(0, frame - idx * 14),
-            fps,
-            config: { damping: 15 },
-          });
-          return (
-            <div
-              key={idx}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 24,
-                backgroundColor: "rgba(255,255,255,0.08)",
-                border: "2px solid rgba(255,255,255,0.16)",
-                borderRadius: 24,
-                padding: "30px 32px",
-                fontSize: 36,
-                fontWeight: 700,
-                opacity: itemIn,
-                transform: `translateX(${interpolate(itemIn, [0, 1], [-50, 0])}px)`,
-              }}
-            >
-              <div
-                style={{
-                  minWidth: 56,
-                  height: 56,
-                  borderRadius: 16,
-                  backgroundColor: theme.accentColor,
-                  color: "#0F172A",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 30,
-                  fontWeight: 900,
-                }}
-              >
-                {idx + 1}
-              </div>
-              <span>{bullet}</span>
-            </div>
-          );
-        })}
-      </div>
-
-      <div
-        style={{
-          backgroundColor: theme.accentColor,
-          color: "#0F172A",
-          borderRadius: 28,
-          padding: "34px 36px",
-          textAlign: "center",
-          fontSize: 42,
-          fontWeight: 900,
-          opacity: ctaPop,
-          transform: `scale(${interpolate(ctaPop, [0, 1], [0.9, 1])})`,
-        }}
-      >
-        OPINA EN LOS COMENTARIOS ↓
-      </div>
-
-      <SceneSubtitle
-        scene={scene}
-        accent={theme.accentColor}
-        voiceSpeed={voiceSpeed}
-        subtitleStyle={subtitleStyle}
-      />
-    </AbsoluteFill>
+    ) : null,
+    h(SceneSubtitle, {
+      scene,
+      accent: theme.accentColor,
+      voiceSpeed,
+      subtitleStyle,
+    })
   );
 };
 
@@ -978,88 +1137,57 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
   const subtitleStyle: SubtitleStyle = spec.subtitleStyle || "dynamic";
   const resolvedGlobalAudio = resolveMediaSrc(audioUrl);
 
-  const rootStyle: React.CSSProperties = {
-    backgroundColor: theme.bgColor,
-  };
-
   let cursor = 0;
 
-  return (
-    <AbsoluteFill style={rootStyle}>
-      {resolvedGlobalAudio ? <Audio src={resolvedGlobalAudio} /> : null}
-      {spec.scenes.map((scene, index) => {
-        const durationInFrames = Math.max(
-          30,
-          Math.ceil((scene.durationSeconds || 5) * fps)
-        );
-        const from = cursor;
-        cursor += durationInFrames;
-        const resolvedSceneAudio = resolveMediaSrc(scene.audioUrl);
+  return h(
+    AbsoluteFill,
+    { style: { backgroundColor: theme.bgColor } },
+    resolvedGlobalAudio ? h(Audio, { src: resolvedGlobalAudio }) : null,
+    spec.scenes.map((scene, index) => {
+      const durationInFrames = Math.max(
+        30,
+        Math.ceil((scene.durationSeconds || 5) * fps)
+      );
+      const from = cursor;
+      cursor += durationInFrames;
+      const resolvedSceneAudio = resolveMediaSrc(scene.audioUrl);
 
-        return (
-          <Sequence
-            key={scene.id || index}
-            from={from}
-            durationInFrames={durationInFrames}
-          >
-            {!resolvedGlobalAudio && resolvedSceneAudio ? (
-              <Sequence from={SCENE_LEAD_IN_FRAMES}>
-                <Audio src={resolvedSceneAudio} playbackRate={voiceSpeed} />
-              </Sequence>
-            ) : null}
-            <SceneFade isFirst={index === 0}>
-              {scene.type === "custom" && (
-                <SceneCustom
-                  scene={scene}
-                  theme={theme}
-                  voiceSpeed={voiceSpeed}
-                  subtitleStyle={subtitleStyle}
-                />
-              )}
-              {scene.type === "hook" && (
-                <SceneHook
-                  scene={scene}
-                  theme={theme}
-                  voiceSpeed={voiceSpeed}
-                  subtitleStyle={subtitleStyle}
-                />
-              )}
-              {scene.type === "tactics" && (
-                <SceneTactics
-                  scene={scene}
-                  theme={theme}
-                  voiceSpeed={voiceSpeed}
-                  subtitleStyle={subtitleStyle}
-                />
-              )}
-              {scene.type === "versus" && (
-                <SceneVersus
-                  scene={scene}
-                  theme={theme}
-                  voiceSpeed={voiceSpeed}
-                  subtitleStyle={subtitleStyle}
-                />
-              )}
-              {scene.type === "headline" && (
-                <SceneHeadline
-                  scene={scene}
-                  theme={theme}
-                  voiceSpeed={voiceSpeed}
-                  subtitleStyle={subtitleStyle}
-                />
-              )}
-              {scene.type === "cta" && (
-                <SceneCta
-                  scene={scene}
-                  theme={theme}
-                  voiceSpeed={voiceSpeed}
-                  subtitleStyle={subtitleStyle}
-                />
-              )}
-            </SceneFade>
-          </Sequence>
-        );
-      })}
-    </AbsoluteFill>
+      const audioNode =
+        !resolvedGlobalAudio && resolvedSceneAudio
+          ? h(
+              Sequence,
+              { from: SCENE_LEAD_IN_FRAMES },
+              h(Audio, { src: resolvedSceneAudio, playbackRate: voiceSpeed })
+            )
+          : null;
+
+      const sceneNode =
+        scene.type === "tactics"
+          ? h(SceneTactics, {
+              scene,
+              theme,
+              voiceSpeed,
+              subtitleStyle,
+              sceneIndex: index,
+            })
+          : h(SceneCinematic, {
+              scene,
+              theme,
+              voiceSpeed,
+              subtitleStyle,
+              sceneIndex: index,
+            });
+
+      return h(
+        Sequence,
+        {
+          key: scene.id || index,
+          from,
+          durationInFrames,
+        },
+        audioNode,
+        h(SceneTransition, { isFirst: index === 0 }, sceneNode)
+      );
+    })
   );
 };

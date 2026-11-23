@@ -67,10 +67,10 @@ export default async (req) => {
 
     const models = [...new Set([primaryModel, ...fallbackList])];
 
-    const systemInstruction = `Eres director creativo e ilustrador vectorial 2D para videos verticales 9:16 de fútbol en español.
+    const systemInstruction = `Eres director creativo, guionista y director de fotografía de videos verticales 9:16 virales de fútbol en español (TikTok / Reels / YouTube Shorts).
 Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
 {
-  "title": "Título corto",
+  "title": "Título corto del video",
   "theme": {
     "primaryColor": "#004D98",
     "secondaryColor": "#A50044",
@@ -80,50 +80,55 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
   "scenes": [
     {
       "id": "s1",
-      "type": "custom" | "hook" | "tactics" | "versus" | "headline" | "cta",
+      "type": "cinematic" | "tactics",
+      "layout": "hero-impact" | "story-clean" | "split-versus" | "stat-overlay" | "quote-press" | "cta-engage",
+      "cameraMotion": "impact-punch" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right",
       "durationSeconds": 6,
-      "badge": "ETIQUETA",
-      "title": "TITULAR BREVE",
-      "subtitle": "Frase narrada de máximo 16 palabras.",
-      "svgMarkup": "<svg viewBox='0 0 800 800' xmlns='http://www.w3.org/2000/svg'>...</svg>",
-      "highlightValue": "80%",
+      "badge": "ETIQUETA BREVE",
+      "title": "TITULAR CON IMPACTO",
+      "subtitle": "Frase narrada natural y directa (10 a 18 palabras) en español.",
+      "imagePrompt": "Detailed ENGLISH visual prompt describing a realistic full-bleed vertical 9:16 scene with exact characters, facial expressions, jerseys/outfits, actions, environment, lighting, and camera framing. Never include text or borders.",
+      "fallbackImagePrompt": "Alternative ENGLISH visual prompt describing the same football scene with expressive cinematic sports artwork and zero text.",
+      "highlightValue": "60M €",
       "stampText": "CLAVE",
-      "jerseyNumber": "10",
-      "leftLabel": "Opción A",
-      "leftValue": 70,
-      "rightLabel": "Opción B",
-      "rightValue": 30,
-      "bullets": ["Punto 1", "Punto 2"],
-      "tacticCaption": "Movimiento táctico breve."
+      "quoteText": "Frase corta de titular o contexto si layout es quote-press.",
+      "leftLabel": "Lamine",
+      "leftValue": 78,
+      "rightLabel": "Mbappé",
+      "rightValue": 82,
+      "bullets": ["Opción 1", "Opción 2"],
+      "tacticCaption": "Solo si type es tactics."
     }
   ]
 }
 
-REGLAS CRÍTICAS DE COHERENCIA VISUAL:
-1. Usa entre 4 y 5 escenas que sumen cerca de ${durationSeconds} segundos.
-2. NUNCA uses "tactics" (pizarrón) si el tema NO trata de táctica o movimientos en cancha.
-3. NUNCA uses "versus" (barras de porcentaje) si el tema NO compara estadísticas reales.
-4. Para historias, polémicas, casos institucionales, despachos, documentos, árbitros o personajes específicos (ej. Figo, Florentino, Negreira, directivos, periodistas, jugadores), usa type: "custom" y dibuja un "svgMarkup" fiel y detallado para cada escena.
-5. REGLAS PARA "svgMarkup" (cuando type es "custom"):
-   - Siempre usa exactamente: <svg viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">...</svg>
-   - Dibuja ilustraciones vectoriales 2D estilo cartoon editorial limpio, con contornos oscuros (stroke="#0F172A" stroke-width="6"), formas geométricas bien proporcionadas, sombras simples y colores vivos.
-   - Si hay personajes, dibuja rasgos reconocibles y expresivos: cabeza, cabello característico, gafas si aplica, cejas y boca con emoción, vestimenta acorde (traje y corbata, uniforme de árbitro, camiseta de fútbol con colores correctos) y objetos en escena (carpetas confidenciales, contratos, billetes, micrófonos, silbatos, tarjetas, estadios).
-   - No incluyas <script>, <style> ni enlaces externos. Usa comillas simples dentro de los atributos SVG para mantener el JSON limpio.
-6. La última escena puede ser "cta" (con bullets y pregunta final) o "custom" si el cierre requiere personajes.`;
+REGLAS DE ORO PARA QUE CADA VIDEO SEA ÚNICO Y NATURAL:
+1. Adapta el número de escenas (entre 4 y 6) y la estructura narrativa completamente al tema pedido por el usuario. NO repitas siempre el mismo orden de layouts.
+2. Usa "type": "cinematic" para casi todas las escenas. Usa "type": "tactics" ÚNICAMENTE si el usuario pide explícitamente explicar una jugada o movimiento táctico en pizarra.
+3. Adapta "layout" al contenido real de cada escena y evita repetir el mismo layout en dos escenas seguidas:
+   - "hero-impact": apertura o momento explosivo con titular gigante y destello.
+   - "story-clean": escena narrativa cinematográfica limpia para que brille la imagen (ideal para historias, despachos, documentos, momentos de partido, drama).
+   - "split-versus": SOLO cuando el tema compara o enfrenta a dos jugadores o equipos (incluye leftLabel, rightLabel y opcionalmente valores si hay datos reales).
+   - "stat-overlay": SOLO cuando hay una cifra, año, monto o récord real que destacar (pon el dato en highlightValue y una palabra en stampText).
+   - "quote-press": ideal para polémicas, noticias, fichajes, declaraciones o casos institucionales (usa quoteText con un titular de prensa breve).
+   - "cta-engage": cierre con pregunta directa a la audiencia (usa bullets solo si aportan 2 opciones de debate).
+4. Varía "cameraMotion" entre escenas consecutivas ("impact-punch", "zoom-in", "pan-right", "zoom-out", "pan-left") para mantener dinamismo visual constante.
+5. "imagePrompt" SIEMPRE en inglés, muy específico y fotorrealista: describe personas concretas (ej. Lamine Yamal with curly dark hair in FC Barcelona blaugrana jersey, Kylian Mbappé in white Real Madrid jersey, Florentino Pérez in tailored dark suit with glasses in an executive office, referees on pitch, confidential folders on a dark desk, roaring stadium crowd), ángulos de cámara (close-up, low angle, medium shot, over-the-shoulder) e iluminación cinematográfica. Indica composición vertical limpia con espacio arriba y abajo para superponer títulos y subtítulos, SIN texto ni marcos dentro de la imagen.
+6. Adapta "theme" a los colores reales del tema pedido (blaugrana si es del Barça, dorado/oscuro si es Champions o polémica institucional, etc.).`;
 
     const buildPayload = (disableThinking) => ({
       system_instruction: { parts: [{ text: systemInstruction }] },
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: "application/json",
-        temperature: 0.75,
-        maxOutputTokens: 12000,
+        temperature: 0.8,
+        maxOutputTokens: 6000,
         ...(disableThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
       },
     });
 
     const startTime = Date.now();
-    const maxBudgetMs = 45000;
+    const maxBudgetMs = 40000;
     let lastResult = { ok: false, status: 503, data: {} };
     let usedModel = primaryModel;
 

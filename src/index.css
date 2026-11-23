@@ -441,3 +441,14 @@ select:focus {
     transform: rotate(360deg);
   }
 }
+
+.badge-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.prompt-input {
+  font-size: 12px !important;
+  color: #93c5fd !important;
+}

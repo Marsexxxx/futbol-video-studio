@@ -1,13 +1,42 @@
-export type SceneType = "custom" | "hook" | "tactics" | "versus" | "headline" | "cta";
+export type SceneType =
+  | "cinematic"
+  | "tactics"
+  | "hook"
+  | "versus"
+  | "headline"
+  | "cta"
+  | "custom";
+
+export type SceneLayout =
+  | "hero-impact"
+  | "story-clean"
+  | "split-versus"
+  | "stat-overlay"
+  | "quote-press"
+  | "cta-engage";
+
+export type CameraMotion =
+  | "impact-punch"
+  | "zoom-in"
+  | "zoom-out"
+  | "pan-left"
+  | "pan-right";
+
 export type SubtitleStyle = "dynamic" | "classic";
+export type VisualStyle = "photoreal" | "hyperart" | "editorial3d";
 
 export interface VideoScene {
   id: string;
   type: SceneType;
+  layout?: SceneLayout;
+  cameraMotion?: CameraMotion;
   durationSeconds: number;
   badge: string;
   title: string;
   subtitle: string;
+  imagePrompt?: string;
+  fallbackImagePrompt?: string;
+  quoteText?: string;
   highlightValue?: string;
   stampText?: string;
   jerseyNumber?: string;

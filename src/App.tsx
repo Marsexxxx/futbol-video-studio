@@ -13,10 +13,22 @@ import {
   Loader2,
   CheckCircle2,
   ExternalLink,
+  Wand2,
 } from "lucide-react";
 import { DynamicVideo, SCENE_LEAD_IN_FRAMES } from "./remotion/DynamicVideo";
 import { DEFAULT_VIDEO_SPEC } from "./defaultVideo";
-import { SceneType, SubtitleStyle, VideoScene, VideoSpec } from "./types";
+import {
+  CameraMotion,
+  SceneLayout,
+  SceneType,
+  SubtitleStyle,
+  VideoScene,
+  VideoSpec,
+  VisualStyle,
+} from "./types";
+
+const h = React.createElement;
+const RemotionPlayer = Player as React.ComponentType<any>;
 
 const FPS = 30;
 const LEAD_IN_SEC = SCENE_LEAD_IN_FRAMES / FPS;
@@ -44,6 +56,12 @@ const STYLE_OPTIONS = [
   { id: "hype", label: "Estilo Narrador intenso" },
 ];
 
+const VISUAL_STYLE_OPTIONS: { id: VisualStyle; label: string }[] = [
+  { id: "photoreal", label: "Visual: Fotorrealista cinematográfico" },
+  { id: "hyperart", label: "Visual: Arte deportivo hiperrealista" },
+  { id: "editorial3d", label: "Visual: 3D Cinematográfico" },
+];
+
 const SPEED_OPTIONS = [
   { value: 0.95, label: "0.95x Pausada" },
   { value: 1.0, label: "1.0x Natural (Recomendada)" },
@@ -62,6 +80,13 @@ type TtsResponse = {
   audioBase64?: string;
   mimeType?: string;
   durationSeconds?: number | null;
+  provider?: string;
+  error?: string;
+};
+
+type ImageGenResponse = {
+  imageBase64?: string;
+  mimeType?: string;
   provider?: string;
   error?: string;
 };
@@ -120,6 +145,60 @@ async function blobUrlToAsset(
     base64: bytesToBase64(new Uint8Array(buffer)),
     ext: mimeToExt(blob.type, fallbackExt),
   };
+}
+
+function compressToVerticalJpeg(
+  base64: string,
+  mimeType: string
+): Promise<string> {
+  return new Promise((resolve) => {
+    const bytes = base64ToBytes(base64);
+    const rawBlob = new Blob([bytes.buffer as ArrayBuffer], {
+      type: mimeType || "image/png",
+    });
+    const tempUrl = URL.createObjectURL(rawBlob);
+    const img = new window.Image();
+
+    img.onload = () => {
+      try {
+        const targetW = 900;
+        const targetH = 1600;
+        const canvas = document.createElement("canvas");
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(tempUrl);
+          return;
+        }
+
+        const scale = Math.max(targetW / img.width, targetH / img.height);
+        const drawW = img.width * scale;
+        const drawH = img.height * scale;
+        const dx = (targetW - drawW) / 2;
+        const dy = (targetH - drawH) / 2;
+
+        ctx.drawImage(img, dx, dy, drawW, drawH);
+        canvas.toBlob(
+          (jpgBlob) => {
+            if (jpgBlob) {
+              URL.revokeObjectURL(tempUrl);
+              resolve(URL.createObjectURL(jpgBlob));
+            } else {
+              resolve(tempUrl);
+            }
+          },
+          "image/jpeg",
+          0.85
+        );
+      } catch {
+        resolve(tempUrl);
+      }
+    };
+
+    img.onerror = () => resolve(tempUrl);
+    img.src = tempUrl;
+  });
 }
 
 async function measureExactAudioDuration(
@@ -220,6 +299,48 @@ async function fetchSceneVoice(
   };
 }
 
+async function fetchSceneImage(
+  scene: VideoScene,
+  visualStyle: VisualStyle
+): Promise<{ imageUrl: string; provider: string }> {
+  const promptText = (
+    scene.imagePrompt ||
+    `Cinematic vertical sports scene representing: ${scene.title}. ${scene.subtitle}`
+  ).trim();
+
+  const res = await fetch("/api/generate-image", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      prompt: promptText,
+      fallbackPrompt: scene.fallbackImagePrompt || promptText,
+      visualStyle,
+    }),
+  });
+
+  const raw = await res.text();
+  let data: ImageGenResponse = {};
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new Error(`Error Imagen (${res.status}): ${raw.slice(0, 120)}`);
+  }
+
+  if (!res.ok || !data.imageBase64) {
+    throw new Error(data.error || "No se pudo generar la imagen de la escena.");
+  }
+
+  const imageUrl = await compressToVerticalJpeg(
+    data.imageBase64,
+    data.mimeType || "image/png"
+  );
+
+  return {
+    imageUrl,
+    provider: data.provider || "gemini-image",
+  };
+}
+
 export function App() {
   const [spec, setSpec] = useState<VideoSpec>({
     ...DEFAULT_VIDEO_SPEC,
@@ -231,17 +352,27 @@ export function App() {
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState("");
   const [error, setError] = useState<string | null>(null);
+
   const [voice, setVoice] = useState("Fenrir");
   const [accent, setAccent] = useState("es-MX");
   const [voiceStyle, setVoiceStyle] = useState("tiktok");
   const [voiceSpeed, setVoiceSpeed] = useState(1.0);
   const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>("dynamic");
-  const [voiceProvider, setVoiceProvider] = useState<string | null>(null);
+  const [visualStyle, setVisualStyle] = useState<VisualStyle>("photoreal");
   const [autoVoice, setAutoVoice] = useState(true);
+  const [autoImages, setAutoImages] = useState(true);
+
+  const [voiceProvider, setVoiceProvider] = useState<string | null>(null);
+  const [imageProvider, setImageProvider] = useState<string | null>(null);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [voiceProgress, setVoiceProgress] = useState("");
+  const [imagesLoading, setImagesLoading] = useState(false);
+  const [imagesProgress, setImagesProgress] = useState("");
   const [sceneVoiceLoading, setSceneVoiceLoading] = useState<number | null>(null);
+  const [sceneImageLoading, setSceneImageLoading] = useState<number | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioName, setAudioName] = useState<string | null>(null);
   const [exportState, setExportState] = useState<ExportState>({ status: "idle" });
@@ -266,6 +397,11 @@ export function App() {
 
   const syncedScenesCount = useMemo(
     () => spec.scenes.filter((s) => Boolean(s.audioUrl)).length,
+    [spec]
+  );
+
+  const imagesReadyCount = useMemo(
+    () => spec.scenes.filter((s) => Boolean(s.imageUrl)).length,
     [spec]
   );
 
@@ -310,12 +446,18 @@ export function App() {
     selectedAccent = accent,
     selectedStyle = voiceStyle,
     selectedSpeed = voiceSpeed
-  ) => {
+  ): Promise<VideoSpec> => {
     setVoiceLoading(true);
     setVoiceError(null);
+    const updatedScenes = [...targetSpec.scenes];
+    let latestSpec: VideoSpec = {
+      ...targetSpec,
+      voiceSpeed: selectedSpeed,
+      subtitleStyle,
+      scenes: updatedScenes,
+    };
 
     try {
-      const updatedScenes = [...targetSpec.scenes];
       let lastProvider = "gemini-3.8-flash-lite-tts";
 
       for (let i = 0; i < updatedScenes.length; i++) {
@@ -344,12 +486,11 @@ export function App() {
           durationSeconds: result.durationSeconds,
         };
 
-        setSpec({
-          ...targetSpec,
-          voiceSpeed: selectedSpeed,
-          subtitleStyle,
+        latestSpec = {
+          ...latestSpec,
           scenes: [...updatedScenes],
-        });
+        };
+        setSpec(latestSpec);
       }
 
       setVoiceProvider(lastProvider);
@@ -363,6 +504,59 @@ export function App() {
       setVoiceLoading(false);
       setVoiceProgress("");
     }
+
+    return latestSpec;
+  };
+
+  const generateAllImages = async (
+    targetSpec: VideoSpec,
+    selectedVisualStyle = visualStyle
+  ): Promise<VideoSpec> => {
+    setImagesLoading(true);
+    setImageError(null);
+    const updatedScenes = [...targetSpec.scenes];
+    let latestSpec: VideoSpec = { ...targetSpec, scenes: updatedScenes };
+
+    try {
+      let lastProvider = "gemini-image";
+
+      for (let i = 0; i < updatedScenes.length; i++) {
+        const scene = updatedScenes[i];
+        if (scene.type === "tactics") continue;
+
+        setImagesProgress(`Imagen ${i + 1}/${updatedScenes.length}...`);
+        const result = await fetchSceneImage(scene, selectedVisualStyle);
+        lastProvider = result.provider;
+
+        if (scene.imageUrl && scene.imageUrl.startsWith("blob:")) {
+          URL.revokeObjectURL(scene.imageUrl);
+        }
+
+        updatedScenes[i] = {
+          ...scene,
+          imageUrl: result.imageUrl,
+        };
+
+        latestSpec = {
+          ...latestSpec,
+          scenes: [...updatedScenes],
+        };
+        setSpec(latestSpec);
+      }
+
+      setImageProvider(lastProvider);
+    } catch (err) {
+      setImageError(
+        err instanceof Error
+          ? err.message
+          : "No se pudieron generar todas las imágenes."
+      );
+    } finally {
+      setImagesLoading(false);
+      setImagesProgress("");
+    }
+
+    return latestSpec;
   };
 
   const regenerateSingleSceneVoice = async (index: number) => {
@@ -399,14 +593,41 @@ export function App() {
     }
   };
 
+  const regenerateSingleSceneImage = async (index: number) => {
+    const scene = spec.scenes[index];
+    if (!scene) return;
+
+    setSceneImageLoading(index);
+    setImageError(null);
+
+    try {
+      const result = await fetchSceneImage(scene, visualStyle);
+      setImageProvider(result.provider);
+      if (scene.imageUrl && scene.imageUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(scene.imageUrl);
+      }
+      updateScene(index, {
+        type: scene.type === "tactics" ? "cinematic" : scene.type,
+        imageUrl: result.imageUrl,
+      });
+    } catch (err) {
+      setImageError(
+        err instanceof Error ? err.message : "No se pudo regenerar la imagen."
+      );
+    } finally {
+      setSceneImageLoading(null);
+    }
+  };
+
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim()) return;
 
     setLoading(true);
-    setLoadingStep("Creando guion con Gemini...");
+    setLoadingStep("Creando guion y dirección visual...");
     setError(null);
     setVoiceError(null);
+    setImageError(null);
 
     try {
       const res = await fetch("/api/generate-video", {
@@ -436,17 +657,22 @@ export function App() {
         throw new Error("La respuesta no incluyó escenas válidas.");
       }
 
-      const generatedSpec: VideoSpec = {
+      let currentSpec: VideoSpec = {
         ...(data as VideoSpec),
         voiceSpeed,
         subtitleStyle,
       };
-      setSpec(generatedSpec);
+      setSpec(currentSpec);
+
+      if (autoImages) {
+        setLoadingStep("Generando imágenes realistas 9:16...");
+        currentSpec = await generateAllImages(currentSpec, visualStyle);
+      }
 
       if (autoVoice && !audioUrl) {
-        setLoadingStep("Generando voz de estudio...");
-        await generateAllVoices(
-          generatedSpec,
+        setLoadingStep("Generando voz de estudio sincronizada...");
+        currentSpec = await generateAllVoices(
+          currentSpec,
           voice,
           accent,
           voiceStyle,
@@ -505,7 +731,7 @@ export function App() {
 
         if (s.imageUrl && s.imageUrl.startsWith("blob:")) {
           const key = `scene-image-${i}`;
-          assets[key] = await blobUrlToAsset(s.imageUrl, "png");
+          assets[key] = await blobUrlToAsset(s.imageUrl, "jpg");
           copy.imageAssetKey = key;
           delete copy.imageUrl;
         }
@@ -614,7 +840,7 @@ export function App() {
     const file = e.target.files?.[0];
     if (!file) return;
     const url = URL.createObjectURL(file);
-    updateScene(index, { imageUrl: url });
+    updateScene(index, { type: "cinematic", imageUrl: url });
   };
 
   const updateScene = (index: number, patch: Partial<VideoScene>) => {
@@ -629,13 +855,15 @@ export function App() {
   const addScene = () => {
     const newScene: VideoScene = {
       id: `s-${Date.now()}`,
-      type: "headline",
+      type: "cinematic",
+      layout: "story-clean",
+      cameraMotion: "zoom-in",
       durationSeconds: 5,
       badge: "NUEVA ESCENA",
       title: "TITULAR",
       subtitle: "Texto narrado para esta escena.",
-      highlightValue: "100%",
-      stampText: "CLAVE",
+      imagePrompt:
+        "Dramatic vertical football stadium atmosphere at night under floodlights, realistic sports photography",
     };
     setSpec((prev) => ({ ...prev, scenes: [...prev.scenes, newScene] }));
   };
@@ -652,7 +880,7 @@ export function App() {
     const cleanSpec: VideoSpec = {
       ...spec,
       scenes: spec.scenes.map(
-        ({ audioUrl: _a, rawAudioDuration: _r, ...rest }) => rest
+        ({ audioUrl: _a, rawAudioDuration: _r, imageUrl: _i, ...rest }) => rest
       ),
     };
     const blob = new Blob([JSON.stringify(cleanSpec, null, 2)], {
@@ -671,17 +899,19 @@ export function App() {
     exportState.status === "queued" ||
     exportState.status === "in_progress";
 
+  const isBusy = loading || voiceLoading || imagesLoading;
+
   return (
     <div className="studio-shell">
       <header className="studio-header">
         <div className="brand">
-          <Film size={20} />
+          {h(Film, { size: 20 })}
           <span>Barça Video Studio AI</span>
         </div>
         <div className="header-actions">
           <span className="pill">{totalSeconds}s · 9:16</span>
           <button type="button" className="btn-secondary" onClick={downloadJson}>
-            <Download size={16} />
+            {h(Download, { size: 16 })}
             JSON
           </button>
 
@@ -691,7 +921,7 @@ export function App() {
               className="btn-success"
               onClick={() => triggerDownload(exportState.mp4AssetId!)}
             >
-              <CheckCircle2 size={16} />
+              {h(CheckCircle2, { size: 16 })}
               Descargar MP4
             </button>
           ) : null}
@@ -699,12 +929,12 @@ export function App() {
           <button
             type="button"
             className="btn-primary"
-            disabled={isExporting || loading || voiceLoading}
+            disabled={isExporting || isBusy}
             onClick={handleExportMp4}
           >
             {isExporting ? (
               <>
-                <Loader2 size={16} className="spin" />
+                {h(Loader2, { size: 16, className: "spin" })}
                 {exportState.status === "uploading"
                   ? "Subiendo..."
                   : exportState.status === "in_progress"
@@ -713,7 +943,7 @@ export function App() {
               </>
             ) : (
               <>
-                <Download size={16} />
+                {h(Download, { size: 16 })}
                 Exportar MP4
               </>
             )}
@@ -724,11 +954,11 @@ export function App() {
       {exportState.status !== "idle" && (
         <div className={`export-banner export-${exportState.status}`}>
           <div className="export-banner-left">
-            {isExporting && <Loader2 size={16} className="spin" />}
-            {exportState.status === "completed" && <CheckCircle2 size={16} />}
+            {isExporting && h(Loader2, { size: 16, className: "spin" })}
+            {exportState.status === "completed" && h(CheckCircle2, { size: 16 })}
             <span>
               {exportState.status === "uploading" &&
-                "Empaquetando escenas, subtítulos y audio para renderizar..."}
+                "Empaquetando imágenes, subtítulos y audio para renderizar..."}
               {exportState.status === "queued" &&
                 "Trabajo enviado a GitHub Actions. Esperando servidor de render (1-2 min)..."}
               {exportState.status === "in_progress" &&
@@ -747,7 +977,7 @@ export function App() {
                 rel="noreferrer"
                 className="export-link"
               >
-                Ver progreso <ExternalLink size={13} />
+                Ver progreso {h(ExternalLink, { size: 13 })}
               </a>
             )}
             {exportState.status === "completed" && exportState.mp4AssetId && (
@@ -756,7 +986,7 @@ export function App() {
                 className="btn-success"
                 onClick={() => triggerDownload(exportState.mp4AssetId!)}
               >
-                <Download size={14} />
+                {h(Download, { size: 14 })}
                 Volver a descargar
               </button>
             )}
@@ -768,14 +998,14 @@ export function App() {
         <section className="editor-panel">
           <form className="card" onSubmit={handleGenerate}>
             <div className="card-title">
-              <Sparkles size={16} />
-              <span>Generar estructura con Gemini</span>
+              {h(Sparkles, { size: 16 })}
+              <span>Generar video completo con Gemini</span>
             </div>
             <textarea
               rows={3}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Ej: Crea un video de 40 segundos sobre la remontada del 6-1 del Barça al PSG, explicando la presión alta y el gol de Sergi Roberto..."
+              placeholder="Ej: Duelo épico entre Lamine Yamal y Kylian Mbappé en El Clásico, con escenas realistas en el estadio, tensión en el túnel y cierre preguntando quién es el nuevo rey..."
             />
             <div className="form-row">
               <label className="duration-field">
@@ -789,13 +1019,13 @@ export function App() {
                 />
                 <span>seg</span>
               </label>
-              <button
-                type="submit"
-                className="btn-primary"
-                disabled={loading || voiceLoading}
-              >
-                <Sparkles size={16} />
-                {loading ? loadingStep || "Generando..." : "Crear video"}
+              <button type="submit" className="btn-primary" disabled={isBusy}>
+                {isBusy
+                  ? h(Loader2, { size: 16, className: "spin" })
+                  : h(Sparkles, { size: 16 })}
+                {loading
+                  ? imagesProgress || voiceProgress || loadingStep || "Generando..."
+                  : "Crear video"}
               </button>
             </div>
             {error && <div className="error-banner">{error}</div>}
@@ -804,19 +1034,39 @@ export function App() {
           <div className="card">
             <div className="card-header-between">
               <div className="card-title">
-                <Volume2 size={16} />
-                <span>Voz en off y subtítulos</span>
+                {h(Wand2, { size: 16 })}
+                <span>Visuales IA, voz y subtítulos</span>
               </div>
-              {!audioUrl && syncedScenesCount > 0 && (
-                <span className="status-badge">
-                  {voiceProvider || "Gemini TTS"} · {voiceSpeed}x (
-                  {syncedScenesCount}/{spec.scenes.length})
-                </span>
-              )}
-              {audioUrl && <span className="status-badge">Usando tu audio</span>}
+              <div className="badge-group">
+                {imagesReadyCount > 0 && (
+                  <span className="status-badge">
+                    {imageProvider ? "IA Visual" : "Imágenes"} ({imagesReadyCount}/
+                    {spec.scenes.length})
+                  </span>
+                )}
+                {!audioUrl && syncedScenesCount > 0 && (
+                  <span className="status-badge">
+                    {voiceProvider ? "Voz IA" : "Audio"} · {voiceSpeed}x (
+                    {syncedScenesCount}/{spec.scenes.length})
+                  </span>
+                )}
+                {audioUrl && <span className="status-badge">Usando tu audio</span>}
+              </div>
             </div>
 
             <div className="voice-grid">
+              <select
+                value={visualStyle}
+                onChange={(e) => setVisualStyle(e.target.value as VisualStyle)}
+                className="full-span"
+              >
+                {VISUAL_STYLE_OPTIONS.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.label}
+                  </option>
+                ))}
+              </select>
+
               <select value={voice} onChange={(e) => setVoice(e.target.value)}>
                 {VOICE_OPTIONS.map((v) => (
                   <option key={v.id} value={v.id}>
@@ -875,23 +1125,33 @@ export function App() {
               <button
                 type="button"
                 className="btn-primary"
-                disabled={voiceLoading || loading}
+                disabled={isBusy}
+                onClick={() => generateAllImages(spec, visualStyle)}
+              >
+                {h(Wand2, { size: 15 })}
+                {imagesLoading
+                  ? imagesProgress || "Generando imágenes..."
+                  : "Generar imágenes IA"}
+              </button>
+
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={isBusy}
                 onClick={() =>
                   generateAllVoices(spec, voice, accent, voiceStyle, voiceSpeed)
                 }
               >
-                <Volume2 size={15} />
+                {h(Volume2, { size: 15 })}
                 {voiceLoading
                   ? voiceProgress || "Generando voz..."
                   : "Generar voz Gemini"}
               </button>
 
               <label className="btn-secondary file-label">
-                <Mic size={15} />
-                <Upload size={14} />
-                <span>
-                  {audioName ? "Cambiar mi voz" : "Subir mi voz (.mp3 / .wav)"}
-                </span>
+                {h(Mic, { size: 15 })}
+                {h(Upload, { size: 14 })}
+                <span>{audioName ? "Cambiar mi voz" : "Subir mi voz"}</span>
                 <input
                   type="file"
                   accept="audio/*"
@@ -912,7 +1172,7 @@ export function App() {
                       setAudioName(null);
                     }}
                   >
-                    <Trash2 size={14} />
+                    {h(Trash2, { size: 14 })}
                   </button>
                 </div>
               )}
@@ -922,13 +1182,23 @@ export function App() {
               <label className="checkbox-field">
                 <input
                   type="checkbox"
+                  checked={autoImages}
+                  onChange={(e) => setAutoImages(e.target.checked)}
+                />
+                <span>Generar imágenes IA al crear video</span>
+              </label>
+
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
                   checked={autoVoice}
                   onChange={(e) => setAutoVoice(e.target.checked)}
                 />
-                <span>Generar voz automáticamente al crear video</span>
+                <span>Generar voz IA al crear video</span>
               </label>
             </div>
 
+            {imageError && <div className="error-banner">{imageError}</div>}
             {voiceError && <div className="error-banner">{voiceError}</div>}
           </div>
 
@@ -938,7 +1208,7 @@ export function App() {
                 <span>Escenas ({spec.scenes.length})</span>
               </div>
               <button type="button" className="btn-secondary" onClick={addScene}>
-                <Plus size={15} />
+                {h(Plus, { size: 15 })}
                 Añadir escena
               </button>
             </div>
@@ -949,19 +1219,48 @@ export function App() {
                   <div className="scene-card-top">
                     <span className="scene-index">#{index + 1}</span>
                     <select
-                      value={scene.type}
-                      onChange={(e) =>
-                        updateScene(index, { type: e.target.value as SceneType })
+                      value={
+                        scene.type === "tactics"
+                          ? "tactics"
+                          : scene.layout || "story-clean"
                       }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "tactics") {
+                          updateScene(index, { type: "tactics" as SceneType });
+                        } else {
+                          updateScene(index, {
+                            type: "cinematic",
+                            layout: val as SceneLayout,
+                          });
+                        }
+                      }}
                     >
-                      <option value="illustration">Ilustración IA (SVG)</option>
-                      <option value="custom">Ilustración libre (IA)</option>
-                      <option value="hook">Portada (Hook)</option>
+                      <option value="hero-impact">Impacto / Portada</option>
+                      <option value="story-clean">Cinematográfica limpia</option>
+                      <option value="split-versus">Duelo / Cara a cara</option>
+                      <option value="stat-overlay">Dato gigante</option>
+                      <option value="quote-press">Titular / Polémica</option>
+                      <option value="cta-engage">Cierre / Pregunta</option>
                       <option value="tactics">Pizarra táctica</option>
-                      <option value="versus">Comparativa (VS)</option>
-                      <option value="headline">Dato / Titular</option>
-                      <option value="cta">Cierre (CTA)</option>
                     </select>
+
+                    <select
+                      value={scene.cameraMotion || "zoom-in"}
+                      onChange={(e) =>
+                        updateScene(index, {
+                          cameraMotion: e.target.value as CameraMotion,
+                        })
+                      }
+                      title="Animación de cámara"
+                    >
+                      <option value="impact-punch">Golpe</option>
+                      <option value="zoom-in">Zoom In</option>
+                      <option value="zoom-out">Zoom Out</option>
+                      <option value="pan-right">Paneo →</option>
+                      <option value="pan-left">Paneo ←</option>
+                    </select>
+
                     <input
                       type="number"
                       className="sec-input"
@@ -976,6 +1275,19 @@ export function App() {
                       }
                     />
                     <span className="unit">s</span>
+
+                    <button
+                      type="button"
+                      className={`icon-btn ${scene.imageUrl ? "active-voice" : ""}`}
+                      title="Generar o regenerar imagen realista IA de esta escena"
+                      disabled={sceneImageLoading === index || imagesLoading}
+                      onClick={() => regenerateSingleSceneImage(index)}
+                    >
+                      {sceneImageLoading === index
+                        ? h(Loader2, { size: 15, className: "spin" })
+                        : h(Wand2, { size: 15 })}
+                    </button>
+
                     <button
                       type="button"
                       className={`icon-btn ${scene.audioUrl ? "active-voice" : ""}`}
@@ -983,10 +1295,11 @@ export function App() {
                       disabled={sceneVoiceLoading === index || voiceLoading}
                       onClick={() => regenerateSingleSceneVoice(index)}
                     >
-                      <Volume2 size={15} />
+                      {h(Volume2, { size: 15 })}
                     </button>
-                    <label className="icon-btn" title="Añadir ilustración/imagen">
-                      <ImageIcon size={15} />
+
+                    <label className="icon-btn" title="Subir tu propia imagen/foto">
+                      {h(ImageIcon, { size: 15 })}
                       <input
                         type="file"
                         accept="image/*"
@@ -994,13 +1307,14 @@ export function App() {
                         onChange={(e) => handleSceneImageUpload(index, e)}
                       />
                     </label>
+
                     <button
                       type="button"
                       className="icon-btn danger"
                       onClick={() => removeScene(index)}
                       disabled={spec.scenes.length <= 1}
                     >
-                      <Trash2 size={15} />
+                      {h(Trash2, { size: 15 })}
                     </button>
                   </div>
 
@@ -1018,6 +1332,17 @@ export function App() {
                     }
                     placeholder="Texto narrado y subtítulo en pantalla"
                   />
+                  {scene.type !== "tactics" && (
+                    <input
+                      type="text"
+                      value={scene.imagePrompt || ""}
+                      onChange={(e) =>
+                        updateScene(index, { imagePrompt: e.target.value })
+                      }
+                      placeholder="Prompt visual de la escena (puedes editarlo y pulsar la varita mágica)"
+                      className="prompt-input"
+                    />
+                  )}
                 </div>
               ))}
             </div>
@@ -1026,17 +1351,17 @@ export function App() {
 
         <section className="preview-panel">
           <div className="phone-frame">
-            <Player
-              component={DynamicVideo}
-              inputProps={{ spec, audioUrl }}
-              durationInFrames={totalFrames}
-              fps={FPS}
-              compositionWidth={1080}
-              compositionHeight={1920}
-              controls
-              loop
-              style={{ width: "100%", height: "100%" }}
-            />
+            {h(RemotionPlayer, {
+              component: DynamicVideo,
+              inputProps: { spec, audioUrl },
+              durationInFrames: totalFrames,
+              fps: FPS,
+              compositionWidth: 1080,
+              compositionHeight: 1920,
+              controls: true,
+              loop: true,
+              style: { width: "100%", height: "100%" },
+            })}
           </div>
         </section>
       </main>
