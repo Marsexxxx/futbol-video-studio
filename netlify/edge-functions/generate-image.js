@@ -26,7 +26,7 @@ async function discoverImageModels(apiKey) {
   const discovered = [];
   try {
     const res = await fetch(
-      `[https://generativelanguage.googleapis.com/v1beta/models?key=$](https://generativelanguage.googleapis.com/v1beta/models?key=$){apiKey}`
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
     );
     if (res.ok) {
       const data = await res.json();
@@ -99,7 +99,7 @@ async function discoverImageModels(apiKey) {
 }
 
 async function callGeminiImage(model, apiKey, promptText, timeoutMs) {
-  const url = `[https://generativelanguage.googleapis.com/v1beta/models/$](https://generativelanguage.googleapis.com/v1beta/models/$){model}:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const tryOnce = async (payload) => {
     const controller = new AbortController();
@@ -182,7 +182,7 @@ async function callGeminiImage(model, apiKey, promptText, timeoutMs) {
 async function callImagen(model, apiKey, promptText, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const url = `[https://generativelanguage.googleapis.com/v1beta/models/$](https://generativelanguage.googleapis.com/v1beta/models/$){model}:predict?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`;
 
   try {
     const res = await fetch(url, {
