@@ -137,31 +137,47 @@ export default async (req) => {
       .filter(Boolean);
     const models = [...new Set([primaryModel, ...fallbackList])];
 
-    const systemInstruction = `Eres ilustrador experto en SVG animado determinista para video vertical.
+    const systemInstruction = `Eres ilustrador experto en SVG animado determinista para video vertical 9:16 (1080x1920) con calidad de estudio editorial profesional (estilo Kurzgesagt / Vox).
 Devuelve EXCLUSIVAMENTE un objeto JSON válido con la estructura exacta:
 {
-  "svgScene": "<svg viewBox=\"0 0 1080 1120\" xmlns=\"http://www.w3.org/2000/svg\">...</svg>"
+  "svgScene": "<svg viewBox=\"0 0 1080 1920\" preserveAspectRatio=\"xMidYMid slice\" xmlns=\"http://www.w3.org/2000/svg\">...</svg>"
 }
 
-REGLAS ESTRICTAS DEL SVG:
-1. Un único <svg viewBox="0 0 1080 1120" xmlns="http://www.w3.org/2000/svg">...</svg> autocontenido, limpio y expresivo (ENTRE 35 y 75 primitivas SVG).
-2. PROHIBIDO incluir <script>, <foreignObject>, CSS @keyframes, atributos on* o textos largos dentro del SVG (como máximo etiquetas cortas de 1-2 palabras o números clave si forman parte de un objeto como camiseta, cartel o pantalla).
-3. Dibuja personajes o siluetas muy fieles, reconocibles y expresivas acorde a la escena (peinado, barba, gafas, uniforme/vestimenta exacta, postura corporal, gesto facial, utilería y entorno).
-4. Organiza los elementos móviles en grupos <g> usando estas clases semánticas de AnimatedSvgStage:
-   - class="anim-pan-bg" (fondo o arquitectura que panea lento)
-   - class="anim-bob" (torso o cuerpo principal con respiración)
-   - class="anim-head" (cabeza)
-   - class="anim-walk-leg-l" y class="anim-walk-leg-r" (piernas opuestas)
-   - class="anim-arm-l" y class="anim-arm-r" (brazos izquierdo y derecho)
-   - class="anim-enter-left" y class="anim-enter-right" (entrada lateral al inicio)
-   - class="anim-pop" (elemento o insignia que aparece con rebote a mitad de escena)
-   - class="anim-draw" (trazos o líneas progresivas)
-   - class="anim-float" (objetos secundarios flotantes: balones, nubes, íconos, chispas)
-   - class="anim-pulse" (brillo, aura o energía pulsante)
-5. ESTÉTICA OBLIGATORIA (${styleKey}): ${styleRule}
-6. PALETA DE COLOR BASE: primaryColor=${primaryColor}, secondaryColor=${secondaryColor}, accentColor=${accentColor}, bgColor=${bgColor}.${
+REGLAS ESTRICTAS DEL LIENZO Y ZONAS SEGURAS (1080×1920):
+1. Un único <svg viewBox="0 0 1080 1920" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">...</svg> autocontenido, limpio y expresivo (ENTRE 35 y 85 primitivas SVG).
+2. LIENZO FULL-BLEED 100% TRANSPARENTE: PROHIBIDO terminantemente dibujar cajas, marcos, bordes rectangulares o un <rect> opaco de fondo que encierre la ilustración en un cuadrado. El fondo del <svg> DEBE ser 100% transparente para fundirse orgánicamente con el escenario de pantalla completa.
+3. ZONAS SEGURAS EXACTAS DENTRO DE 1080×1920:
+   - Zona superior libre para título/encabezado (${showBrandHeader ? "y = 0 a y = 410" : "y = 0 a y = 380"}): solo luz ambiental, cielo, reflectores o elementos de fondo muy sutiles; NUNCA cabezas, rostros ni objetos clave.
+   - Zona protagónica de personajes y acción (y = 420 a y = 1480, x = 110 a x = 970): deja al menos 110px de margen lateral para que ningún trofeo, balón o brazo quede cortado en los bordes.
+   - Zona inferior libre para subtítulos (y = 1520 a y = 1920): solo suelo, césped extendido, sombras de contacto o degradado ambiental; NUNCA caras ni detalles importantes.
+
+ESTRUCTURA DE 3 CAPAS Y CLASES SEMÁNTICAS OBLIGATORIAS:
+4. Organiza CADA escena explícitamente en estas 3 capas <g> en orden de profundidad:
+   1) <g class="anim-layer-bg">: elementos de entorno integrados sin bordes duros (arcos de estadio con luz radial, horizontes suaves, haces de luz, siluetas lejanas difusas; opcionalmente anim-pan-bg).
+   2) <g class="anim-layer-mid">: personajes principales y objetos clave usando las clases semánticas de movimiento:
+      - class="anim-bob" (torso o cuerpo principal con respiración suave)
+      - class="anim-head" (cabeza)
+      - class="anim-walk-leg-l" y class="anim-walk-leg-r" (piernas opuestas)
+      - class="anim-arm-l" y class="anim-arm-r" (brazos izquierdo y derecho)
+      - class="anim-enter-left" y class="anim-enter-right" (entrada lateral al inicio)
+      - class="anim-pop" (elemento o insignia que aparece con rebote a mitad de escena)
+      - class="anim-draw" (trazos o líneas progresivas)
+      - class="anim-pulse" (brillo, aura o energía pulsante)
+   3) <g class="anim-layer-fg">: detalles sutiles de primer plano (confeti, líneas de velocidad, destellos, balón en movimiento; usa class="anim-float" para flotación suave).
+
+REGLAS ESTRICTAS DE ANATOMÍA Y COMPOSICIÓN:
+5. Proporciones armónicas estilo ilustración editorial moderna: cabezas bien proporcionadas con cuello definido, hombros redondeados, cabello/barba con formas limpias, uniformes fieles con gradientes sutiles de volumen (<defs>) y sombras de contacto en el suelo (<ellipse> semitransparente bajo los pies).
+6. EXTREMIDADES SIEMPRE UNIDAS: coloca los grupos de brazos (anim-arm-l, anim-arm-r) y piernas (anim-walk-leg-l, anim-walk-leg-r) con sus puntos de unión superpuestos ligeramente dentro del torso, hombros y cadera (usa stroke-linecap="round") para que al rotar jamás aparezca un hueco blanco ni extremidades desprendidas.
+7. ROSTROS DESPEJADOS: PROHIBIDO tapar la cara o los ojos de un personaje con trofeos, balones, manos o carteles. Si un personaje levanta un trofeo o cartel, colócalo claramente ARRIBA de la cabeza o a un lado, nunca sobre el rostro.
+8. MANOS LIMPIAS: evita gestos ambiguos o dedos sueltos mal formados; usa manos estilizadas simples y claras (puño cerrado celebrando, palma abierta o sosteniendo un objeto).
+
+REGLAS DE TEXTO Y SEGURIDAD:
+9. PROHIBIDO incluir <script>, <foreignObject>, CSS @keyframes, atributos on*, marcadores complejos, párrafos o etiquetas largas dentro del SVG (evita textos pegados o rotos como "PSG5 - 0INT").
+10. Solo permite texto mínimo cuando sea icónico y visualmente imprescindible (ej. un año "1910", un dorsal de 1-2 dígitos centrado en la camiseta o un marcador bien espaciado "5 - 0"), siempre con tipografía limpia, text-anchor="middle" y ortografía impecable en español con tildes.
+11. ESTÉTICA OBLIGATORIA (${styleKey}): ${styleRule}
+12. PALETA DE COLOR BASE: primaryColor=${primaryColor}, secondaryColor=${secondaryColor}, accentColor=${accentColor}, bgColor=${bgColor}.${
       showBrandHeader
-        ? " Modo corporativo ASR Group activo: prioriza tonos de marca verde/gris cuando corresponda a uniformes o elementos corporativos."
+        ? " Modo corporativo ASR Group activo: prioriza tonos de marca verde/gris cuando corresponda a uniformes o elementos corporativos y mantén libre y = 0 a y = 410 por el encabezado superior."
         : ""
     }`;
 

@@ -187,10 +187,14 @@ const buildAnimationPromptInstructions = (animationStyle, isRecruitment) => `
 INSTRUCCIONES PARA "animationPrompt" (NO generes código SVG aquí):
 - NO generes el campo "svgScene" ni código XML/SVG en esta respuesta para mantener la generación rápida.
 - Para cada escena con "layout": "animated-stage", escribe un "animationPrompt" muy concreto y visual (2 a 4 oraciones) describiendo:
-  1. Personajes o sujetos muy reconocibles (peinado, barba, gafas, uniforme/camiseta con colores exactos o vestimenta laboral, expresión facial, postura y acción exacta).
-  2. Escenario, objetos clave y movimiento sugerido (entradas laterales, gestos, elementos flotantes, estilo ${animationStyle}).
+  1. Personajes o sujetos muy reconocibles (peinado, barba, gafas, uniforme/camiseta con colores exactos o vestimenta laboral, expresión facial, postura y acción exacta) centrados en composición vertical 9:16 de pantalla completa (sin recuadros, sin cajas y con el rostro despejado).
+  2. Escenario abierto, luz ambiental, elementos de primer plano y movimiento sugerido (entradas laterales, gestos naturales, elementos flotantes, estilo ${animationStyle}).
 - NO repitas la misma composición entre escenas: cada escena debe tener un encuadre y acción distinta fiel al guion.
-- Opcionalmente incluye "speechBubble" corto (2 a 4 palabras) cuando aporte dinamismo o humor.${
+- ${
+  animationStyle === "comic"
+    ? 'Incluye "speechBubble" corto únicamente cuando aporte diálogo o humor cómic (máximo 3 palabras, con ortografía impecable y tildes en español).'
+    : 'Deja SIEMPRE "speechBubble": "" (vacío). Usa solo "calloutText" cuando aporte un dato breve (2 a 4 palabras) distinto al título y al badge.'
+}${
   isRecruitment
     ? '\n- En Reclutamiento mantén los colores corporativos ASR Group (#008F4C, #7EC34A, #BCD853, #26282A) y NUNCA pongas "animationPrompt" ni "animated-stage" en la escena final "flyer-end".'
     : ""
@@ -299,15 +303,15 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura (SIN código 
       "cameraMotion": "impact-punch" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right",
       "transition": "slide-left" | "slide-up" | "wipe" | "fade" | "flip",
       "iconName": "briefcase" | "user-check" | "map-pin" | "badge-check" | "phone" | "calendar" | "building" | "check-circle" | "wrench" | "shield" | "trending-up" | "award" | "users" | "target" | "banknote" | "clock" | "sparkles",
-      "calloutText": "Etiqueta corta de 2 a 4 palabras (ej. CONTRATACIÓN INMEDIATA, PRESTACIONES DE LEY)",
+      "calloutText": "Dato breve opcional de 2 a 4 palabras distinto al título y al badge (ej. CONTRATACIÓN INMEDIATA, PRESTACIONES DE LEY), o \"\" si no aporta algo nuevo",
       "durationSeconds": ${avgSecPerScene},
       "badge": "ETIQUETA BREVE",
       "title": "TITULAR CLARO Y ATRACTIVO",
       "subtitle": "Locución natural, cercana y profesional en español.",
       "imagePrompt": "Detailed ENGLISH visual prompt depicting authentic modern agricultural/industrial workplace, friendly Mexican professionals, sugarcane fields, machinery, or modern office matching the exact job role, natural daylight, green and neutral gray color harmony, vertical 9:16 frame, strictly NO text, NO logos, NO borders (or empty string if layout is animated-stage).",
       "fallbackImagePrompt": "Clean modern editorial illustration of the workplace and job role in green and gray tones, vertical 9:16, strictly NO text.",
-      "animationPrompt": "Solo cuando layout es animated-stage (y NUNCA en flyer-end): descripción muy concreta de personajes reconocibles (peinado, ropa laboral, expresión facial, postura/acción), utilería y elementos del escenario.",
-      "speechBubble": "Texto muy corto opcional (2 a 4 palabras) para globo de diálogo",
+      "animationPrompt": "Solo cuando layout es animated-stage (y NUNCA en flyer-end): descripción muy concreta de personajes reconocibles (peinado, ropa laboral, expresión facial, postura/acción) centrados en 9:16 sin recuadros ni rostros tapados, utilería y entorno.",
+      "speechBubble": ${safeAnimationStyle === "comic" ? '"Texto muy corto opcional (máximo 3 palabras, buena ortografía y tildes) para globo cómic"' : '""'},
       "highlightValue": "Dato breve si aplica (ej. 100%, INMEDIATA, +BONOS)",
       "stampText": "VACANTE ACTIVA",
       "quoteText": "Beneficio o frase destacada si layout es quote-press",
@@ -335,7 +339,7 @@ REGLAS ESTRICTAS PARA VIDEOS DE RECLUTAMIENTO:
 3. Mantén el campo "subtitle" de las primeras ${sceneCount - 1} escenas entre ${minWordsPerScene} y ${maxWordsPerScene} palabras para respetar los ${effectiveDuration} segundos reales.
 4. Usa SIEMPRE exactamente los colores oficiales verde y gris en "theme": primaryColor "#008F4C", secondaryColor "#7EC34A", accentColor "#BCD853", bgColor "#26282A".
 5. PROHIBIDO usar "type": "tactics" o "layout": "split-versus" salvo que el prompt pida explícitamente comparar cifras/porcentajes o una pizarra táctica de fútbol.
-6. Usa "iconName" laborales relevantes ("briefcase", "user-check", "map-pin", "badge-check", "wrench", "building", "banknote", "shield", "check-circle") y "calloutText" breves y claros.
+6. Usa "iconName" laborales relevantes ("briefcase", "user-check", "map-pin", "badge-check", "wrench", "building", "banknote", "shield", "check-circle") y "calloutText" breve solo si aporta un dato distinto al título (deja "speechBubble" en "" salvo estilo "comic").
 7. En "imagePrompt" (cuando aplique foto) describe ambientes reales, limpios, seguros y positivos acordes al puesto SIN texto ni letras en las imágenes.`
       : `Eres director creativo, guionista y director de motion graphics para videos verticales 9:16 virales en español sobre CUALQUIER temática (TikTok / Reels / YouTube Shorts).
 ${topicHint}
@@ -360,15 +364,15 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura (SIN código 
       "cameraMotion": "impact-punch" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right",
       "transition": "slide-left" | "slide-up" | "wipe" | "fade" | "flip",
       "iconName": "trophy" | "file-text" | "scale" | "banknote" | "gavel" | "shield" | "flame" | "zap" | "clock" | "globe" | "brain" | "rocket" | "alert" | "megaphone" | "target" | "trending-up" | "lock" | "eye" | "users" | "crown" | "swords" | "sparkles" | "newspaper" | "briefcase" | "landmark" | "cpu" | "heart" | "compass" | "award" | "radio" | "flag",
-      "calloutText": "Dato o golpe visual corto de 2 a 4 palabras que aparece a mitad de escena",
+      "calloutText": "Dato o golpe visual corto de 2 a 4 palabras distinto al título y al badge (o \"\" si no aporta un dato nuevo)",
       "durationSeconds": ${avgSecPerScene},
       "badge": "ETIQUETA BREVE",
       "title": "TITULAR CON IMPACTO",
       "subtitle": "Locución natural en español ajustada exactamente al límite de palabras.",
       "imagePrompt": "Detailed ENGLISH visual prompt describing a vertical 9:16 scene matching the exact topic, people/subjects, setting, lighting, and camera angle. Strictly NO text, NO borders (or empty string if layout is animated-stage).",
       "fallbackImagePrompt": "Alternative ENGLISH visual prompt describing the same scene in dramatic editorial style with zero text.",
-      "animationPrompt": "Cuando layout es animated-stage: descripción visual concreta de personajes reconocibles (peinado, barba, gafas, uniforme/ropa exacta, expresión facial, postura/acción), objetos y escenario sin repetir entre escenas.",
-      "speechBubble": "Texto muy corto opcional (2 a 4 palabras) para globo de diálogo",
+      "animationPrompt": "Cuando layout es animated-stage: descripción visual concreta de personajes reconocibles (peinado, barba, gafas, uniforme/ropa exacta, expresión facial, postura/acción) centrados en 9:16 sin recuadros ni caras tapadas, objetos y escenario abierto.",
+      "speechBubble": ${safeAnimationStyle === "comic" ? '"Texto muy corto opcional (máximo 3 palabras, buena ortografía y tildes) para globo cómic"' : '""'},
       "highlightValue": "Dato corto si aplica",
       "stampText": "CLAVE",
       "quoteText": "Frase corta si layout es quote-press",
@@ -387,7 +391,7 @@ REGLAS DE DINAMISMO VISUAL Y ANTI-PLANTILLAS:
 4. PROHIBIDO usar "type": "tactics" (el tablero fijo) salvo que el usuario pida explícitamente "pizarra táctica de fútbol". En cualquier otro caso usa siempre "type": "cinematic".
 5. PROHIBIDO usar "layout": "split-versus" (barras de porcentaje) salvo que el prompt del usuario pida explícitamente comparar dos cifras o porcentajes.
 6. Cuando renderMode sea "animated", TODAS las escenas deben usar "sceneMode": "animated", "layout": "animated-stage" y un "animationPrompt" muy detallado y creativo por escena. En modo "hybrid", usa "layout": "animated-stage" + "animationPrompt" en las escenas editoriales/animadas sin repetir composiciones.
-7. Elige un "iconName" específico y coherente en CADA escena, y escribe un "calloutText" breve (2 a 4 palabras).
+7. Elige un "iconName" específico y coherente en CADA escena, y usa "calloutText" breve (2 a 4 palabras) solo cuando aporte un dato distinto al título y al badge (deja "speechBubble" en "" salvo estilo "comic").
 8. Varía "layout", "cameraMotion" y "transition" entre escenas consecutivas para que el video tenga ritmo real.
 9. Adapta "theme" a la paleta cromática real del tema.
 10. Cuando una escena use foto ("hybrid" o "cinematic"), "imagePrompt" debe ir SIEMPRE en inglés, muy específico, encuadre vertical 9:16 limpio SIN texto ni marcos.`;
@@ -545,11 +549,26 @@ REGLAS DE DINAMISMO VISUAL Y ANTI-PLANTILLAS:
         nextLayout = "story-clean";
       }
 
+      const rawCallout = typeof scene.calloutText === "string" ? scene.calloutText.trim() : "";
+      const norm = (v) => String(v || "").trim().replace(/\s+/g, " ").toLowerCase();
+      const safeCallout =
+        rawCallout &&
+        norm(rawCallout) !== norm(scene.title) &&
+        norm(rawCallout) !== norm(scene.badge)
+          ? rawCallout
+          : "";
+      const safeSpeechBubble =
+        safeAnimationStyle === "comic" && typeof scene.speechBubble === "string"
+          ? scene.speechBubble.trim()
+          : "";
+
       return {
         ...scene,
         type: nextType,
         sceneMode: nextSceneMode,
         layout: nextLayout,
+        calloutText: safeCallout,
+        speechBubble: safeSpeechBubble,
         imagePrompt:
           nextSceneMode === "animated" ? "" : scene.imagePrompt || "",
       };

@@ -386,6 +386,23 @@ const buildWordChunks = (
   return chunks;
 };
 
+const isBrightHexColor = (hex?: string): boolean => {
+  if (!hex) return true;
+  const clean = hex.trim().replace(/^#/, "");
+  const normalized =
+    clean.length === 3
+      ? clean
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : clean.slice(0, 6);
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return true;
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 >= 0.48;
+};
+
 const ClassicSubtitle: React.FC<{
   text: string;
   accent: string;
@@ -410,12 +427,13 @@ const ClassicSubtitle: React.FC<{
         bottom: compact ? 36 : 94,
         left: compact ? 40 : 52,
         right: compact ? 40 : 52,
+        zIndex: 35,
         backgroundColor: lightMode
-          ? "rgba(255, 255, 255, 0.95)"
-          : "rgba(18, 22, 20, 0.88)",
-        borderTop: lightMode ? "3px solid #0F172A" : "none",
-        borderRight: lightMode ? "3px solid #0F172A" : "none",
-        borderBottom: lightMode ? "3px solid #0F172A" : "none",
+          ? "rgba(255, 255, 255, 0.96)"
+          : "rgba(10, 14, 22, 0.9)",
+        borderTop: lightMode ? "3px solid #0F172A" : "1.5px solid rgba(255, 255, 255, 0.14)",
+        borderRight: lightMode ? "3px solid #0F172A" : "1.5px solid rgba(255, 255, 255, 0.14)",
+        borderBottom: lightMode ? "3px solid #0F172A" : "1.5px solid rgba(255, 255, 255, 0.14)",
         borderLeft: lightMode ? "10px solid #0F172A" : `8px solid ${accent}`,
         borderRadius: 18,
         padding: compact ? "16px 24px" : "24px 30px",
@@ -423,10 +441,11 @@ const ClassicSubtitle: React.FC<{
         fontSize: compact ? 30 : 38,
         fontWeight: 800,
         color: lightMode ? "#0F172A" : "#FFFFFF",
+        textShadow: lightMode ? "none" : "0 2px 10px rgba(0, 0, 0, 0.85)",
         lineHeight: 1.24,
         boxShadow: lightMode
-          ? "0 14px 32px rgba(15, 23, 42, 0.16)"
-          : "0 16px 38px rgba(0, 0, 0, 0.5)",
+          ? "0 14px 34px rgba(15, 23, 42, 0.2)"
+          : "0 16px 40px rgba(0, 0, 0, 0.6)",
         fontFamily: "system-ui, -apple-system, sans-serif",
         opacity: enter,
         transform: `translateY(${interpolate(enter, [0, 1], [18, 0])}px)`,
@@ -474,6 +493,7 @@ const DynamicSubtitle: React.FC<{
     fps,
     config: { damping: 14, stiffness: 220 },
   });
+  const brightAccent = isBrightHexColor(accent);
 
   return h(
     "div",
@@ -483,6 +503,7 @@ const DynamicSubtitle: React.FC<{
         bottom: compact ? 38 : 110,
         left: 42,
         right: 42,
+        zIndex: 35,
         display: "flex",
         justifyContent: "center",
         pointerEvents: "none",
@@ -527,44 +548,53 @@ const DynamicSubtitle: React.FC<{
                 ? compact
                   ? "5px 14px"
                   : "6px 18px"
-                : "5px 8px",
+                : "5px 9px",
               borderRadius: 14,
               border: lightMode
                 ? isCurrent
                   ? "2px solid #0F172A"
-                  : "2px solid rgba(15, 23, 42, 0.16)"
-                : undefined,
+                  : "2px solid rgba(15, 23, 42, 0.22)"
+                : isCurrent
+                ? "2px solid rgba(255, 255, 255, 0.78)"
+                : "1.5px solid rgba(255, 255, 255, 0.14)",
               backgroundColor: lightMode
                 ? isCurrent
                   ? "#0F172A"
-                  : "rgba(255, 255, 255, 0.9)"
+                  : "rgba(255, 255, 255, 0.94)"
                 : isCurrent
                 ? accent
-                : "rgba(18, 22, 20, 0.72)",
+                : "rgba(10, 14, 22, 0.84)",
               color: lightMode
                 ? isCurrent
                   ? "#FFFFFF"
                   : isSpoken
                   ? "#0F172A"
-                  : "rgba(15, 23, 42, 0.52)"
+                  : "#1E293B"
                 : isCurrent
-                ? "#111613"
+                ? brightAccent
+                  ? "#090D12"
+                  : "#FFFFFF"
                 : isSpoken
                 ? "#FFFFFF"
-                : "rgba(255, 255, 255, 0.72)",
+                : "rgba(241, 245, 249, 0.9)",
+              filter: !lightMode && isCurrent ? "brightness(1.1)" : undefined,
               transform: isCurrent
                 ? `scale(${interpolate(wordSpring, [0, 1], [0.9, 1.08])})`
                 : "scale(1)",
               textShadow: lightMode
                 ? "none"
                 : isCurrent
-                ? "none"
-                : "0 4px 16px rgba(0, 0, 0, 0.9)",
+                ? brightAccent
+                  ? "0 1px 1px rgba(255, 255, 255, 0.28)"
+                  : "0 2px 6px rgba(0, 0, 0, 0.65)"
+                : "0 3px 12px rgba(0, 0, 0, 0.92)",
               boxShadow: isCurrent
                 ? lightMode
-                  ? "0 10px 24px rgba(15, 23, 42, 0.25)"
-                  : "0 10px 26px rgba(0, 0, 0, 0.45)"
-                : "none",
+                  ? "0 12px 26px rgba(15, 23, 42, 0.28)"
+                  : `0 12px 30px rgba(0, 0, 0, 0.68), 0 0 24px ${accent}66`
+                : lightMode
+                ? "0 4px 12px rgba(15, 23, 42, 0.1)"
+                : "0 6px 18px rgba(0, 0, 0, 0.45)",
             },
           },
           word.text
@@ -1346,6 +1376,75 @@ const resolveAnimationStyle = (
 const isLightAnimationStyle = (style: AnimationStyle): boolean =>
   style === "minimal-line" || style === "3d-explainer" || style === "lego";
 
+const getSvgAttr = (attrs: string, name: string): string | null => {
+  const re = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i");
+  const m = attrs.match(re);
+  return m ? (m[1] ?? m[2] ?? m[3] ?? "") : null;
+};
+
+const parseSvgMetric = (val: string | null, fullSize: number, fallback: number): number => {
+  if (val === null || val === "") return fallback;
+  const trimmed = val.trim();
+  if (trimmed === "100%") return fullSize;
+  const n = parseFloat(trimmed);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const normalizeBackdropRects = (
+  markup: string,
+  minX: number,
+  minY: number,
+  vbW: number,
+  vbH: number,
+  isLegacyAspect: boolean
+): string => {
+  return markup.replace(
+    /<rect\b([^>]*?)(?:\/>|>\s*<\/rect\s*>)/gi,
+    (full, attrs: string) => {
+      const cls = getSvgAttr(attrs, "class") || "";
+      if (/\banim-/i.test(cls)) return full;
+
+      const x = parseSvgMetric(getSvgAttr(attrs, "x"), vbW, minX);
+      const y = parseSvgMetric(getSvgAttr(attrs, "y"), vbH, minY);
+      const w = parseSvgMetric(getSvgAttr(attrs, "width"), vbW, 0);
+      const hVal = parseSvgMetric(getSvgAttr(attrs, "height"), vbH, 0);
+      const fill = (getSvgAttr(attrs, "fill") || "").trim();
+
+      const isFullWidth = w >= vbW * 0.92;
+      const startsAtTop = y <= minY + Math.max(25, vbH * 0.03);
+      const startsAtLeft = x <= minX + Math.max(25, vbW * 0.03);
+
+      // Strip full-canvas backdrop/frame rects so StyleBackdrop fills 100% 9:16 with no box.
+      if (startsAtLeft && startsAtTop && isFullWidth && hVal >= vbH * 0.9) {
+        if (isLegacyAspect || !/^url\(/i.test(fill)) {
+          return "";
+        }
+      }
+
+      if (isLegacyAspect && startsAtLeft && isFullWidth && fill.toLowerCase() !== "none") {
+        if (startsAtTop && hVal >= vbH * 0.32 && hVal < vbH * 0.9) {
+          const nextY = minY - 720;
+          const nextH = hVal + (y - nextY);
+          const nextAttrs = attrs
+            .replace(/\s+y\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+            .replace(/\s+height\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+            .trim();
+          return `<rect ${nextAttrs} y="${nextY.toFixed(1)}" height="${nextH.toFixed(1)}" />`;
+        }
+        if (y > minY + vbH * 0.45 && y + hVal >= minY + vbH - 25) {
+          const nextH = hVal + 960;
+          const nextAttrs = attrs
+            .replace(/\s+height\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+            .trim();
+          return `<rect ${nextAttrs} height="${nextH.toFixed(1)}" />`;
+        }
+      }
+
+      return full;
+    }
+  );
+};
+
 const sanitizeSvgScene = (rawSvg?: string): string => {
   if (!rawSvg || typeof rawSvg !== "string") return "";
 
@@ -1376,21 +1475,62 @@ const sanitizeSvgScene = (rawSvg?: string): string => {
       '$1"#"'
     );
 
-  if (/<svg\b/i.test(cleaned)) {
-    cleaned = cleaned.replace(/<svg\b([^>]*)>/i, (_full, attrs: string) => {
-      let nextAttrs = attrs
-        .replace(/\s+(?:width|height)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-        .trim();
-      if (!/\bviewBox\s*=/i.test(nextAttrs)) {
-        nextAttrs = `${nextAttrs} viewBox="0 0 1080 1120"`.trim();
-      }
-      if (!/\bpreserveAspectRatio\s*=/i.test(nextAttrs)) {
-        nextAttrs = `${nextAttrs} preserveAspectRatio="xMidYMid meet"`.trim();
-      }
-      return `<svg ${nextAttrs}>`;
-    });
+  const svgTagMatch = cleaned.match(/<svg\b([^>]*)>([\s\S]*)<\/svg\s*>/i);
+  if (svgTagMatch) {
+    const rawAttrs = svgTagMatch[1] || "";
+    let inner = svgTagMatch[2] || "";
+    const vbAttr = getSvgAttr(rawAttrs, "viewBox");
+    const vbNums = vbAttr
+      ? vbAttr
+          .trim()
+          .split(/[\s,]+/)
+          .map(Number)
+      : [];
+    const hasValidVb =
+      vbNums.length === 4 &&
+      vbNums.every((n) => Number.isFinite(n)) &&
+      vbNums[2] > 0 &&
+      vbNums[3] > 0;
+
+    const minX = hasValidVb ? vbNums[0] : 0;
+    const minY = hasValidVb ? vbNums[1] : 0;
+    const vbW = hasValidVb ? vbNums[2] : 1080;
+    const vbH = hasValidVb ? vbNums[3] : 1920;
+    const isLegacyAspect = hasValidVb && vbH / vbW < 1.45;
+
+    inner = normalizeBackdropRects(inner, minX, minY, vbW, vbH, isLegacyAspect);
+
+    if (isLegacyAspect) {
+      const defsBlocks: string[] = [];
+      const body = inner.replace(/<defs\b[^>]*>[\s\S]*?<\/defs\s*>/gi, (m) => {
+        defsBlocks.push(m);
+        return "";
+      });
+      const fitScale = (1080 / vbW) * 1.05;
+      const scaledW = vbW * fitScale;
+      const scaledH = vbH * fitScale;
+      const tx = (1080 - scaledW) / 2 - minX * fitScale;
+      const ty = (1920 - scaledH) / 2 - minY * fitScale;
+      inner = `${defsBlocks.join("")}<g class="anim-legacy-fit" transform="translate(${tx.toFixed(1)}, ${ty.toFixed(1)}) scale(${fitScale.toFixed(4)})">${body}</g>`;
+    }
+
+    const nextAttrs = rawAttrs
+      .replace(/\s+(?:width|height|viewBox|preserveAspectRatio)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+      .trim();
+    const xmlnsAttr = /\bxmlns\s*=/i.test(nextAttrs)
+      ? ""
+      : 'xmlns="http://www.w3.org/2000/svg"';
+    const finalAttrs = [
+      xmlnsAttr,
+      nextAttrs,
+      'viewBox="0 0 1080 1920"',
+      'preserveAspectRatio="xMidYMid slice"',
+    ]
+      .filter(Boolean)
+      .join(" ");
+    cleaned = `<svg ${finalAttrs}>${inner}</svg>`;
   } else {
-    cleaned = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1120" preserveAspectRatio="xMidYMid meet">${cleaned}</svg>`;
+    cleaned = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" preserveAspectRatio="xMidYMid slice">${cleaned}</svg>`;
   }
 
   cleaned = cleaned.replace(
@@ -1407,7 +1547,7 @@ const sanitizeSvgScene = (rawSvg?: string): string => {
 };
 
 const buildFallbackAnimatedSvg = (
-  scene: VideoScene,
+  _scene: VideoScene,
   theme: VideoTheme,
   animationStyle: AnimationStyle
 ): string => {
@@ -1429,34 +1569,31 @@ const buildFallbackAnimatedSvg = (
   const fillPrimary =
     animationStyle === "minimal-line" ? "none" : theme.primaryColor;
 
-  const escapedLabel = (scene.calloutText || scene.badge || "ESCENA")
-    .slice(0, 22)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1120" preserveAspectRatio="xMidYMid meet">
-    <g class="anim-pan-bg" opacity="0.24">
-      <circle cx="240" cy="280" r="110" fill="none" stroke="${accentColor}" stroke-width="5" />
-      <circle cx="840" cy="820" r="140" fill="none" stroke="${strokeColor}" stroke-width="4" />
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" preserveAspectRatio="xMidYMid slice">
+    <g class="anim-layer-bg anim-pan-bg" opacity="0.22">
+      <circle cx="240" cy="480" r="150" fill="none" stroke="${accentColor}" stroke-width="5" />
+      <circle cx="850" cy="1380" r="190" fill="none" stroke="${strokeColor}" stroke-width="4" />
+      <path d="M -80 1320 Q 540 1160 1160 1320" fill="none" stroke="${accentColor}" stroke-width="4" stroke-dasharray="14 14" />
     </g>
-    <g class="anim-enter-left">
-      <path class="anim-draw" d="M 160 830 Q 540 690 920 830" fill="none" stroke="${accentColor}" stroke-width="8" stroke-linecap="round" />
+    <g class="anim-layer-mid">
+      <g class="anim-enter-left">
+        <path class="anim-draw" d="M 120 1240 Q 540 1090 960 1240" fill="none" stroke="${accentColor}" stroke-width="8" stroke-linecap="round" />
+      </g>
+      <g class="anim-bob">
+        <circle class="anim-pulse" cx="540" cy="860" r="230" fill="${fillPrimary}" fill-opacity="${animationStyle === "minimal-line" ? "0" : "0.22"}" stroke="${accentColor}" stroke-width="8" />
+        <rect class="anim-draw" x="370" y="690" width="340" height="340" rx="68" fill="${fillPrimary}" fill-opacity="${animationStyle === "minimal-line" ? "0" : "0.75"}" stroke="${strokeColor}" stroke-width="8" />
+        <circle class="anim-head" cx="540" cy="805" r="52" fill="none" stroke="${strokeColor}" stroke-width="8" />
+        <path class="anim-draw" d="M 442 950 C 442 885, 638 885, 638 950" fill="none" stroke="${accentColor}" stroke-width="10" stroke-linecap="round" />
+      </g>
+      <g class="anim-pop">
+        <circle cx="540" cy="1165" r="46" fill="${accentColor}" opacity="0.92" />
+        <path d="M 522 1165 L 535 1179 L 560 1152" fill="none" stroke="#0F172A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+      </g>
     </g>
-    <g class="anim-bob">
-      <circle class="anim-pulse" cx="540" cy="510" r="185" fill="${fillPrimary}" fill-opacity="${animationStyle === "minimal-line" ? "0" : "0.22"}" stroke="${accentColor}" stroke-width="8" />
-      <rect class="anim-draw" x="390" y="360" width="300" height="300" rx="58" fill="${fillPrimary}" fill-opacity="${animationStyle === "minimal-line" ? "0" : "0.75"}" stroke="${strokeColor}" stroke-width="8" />
-      <circle class="anim-head" cx="540" cy="465" r="46" fill="none" stroke="${strokeColor}" stroke-width="8" />
-      <path class="anim-draw" d="M 455 595 C 455 540, 625 540, 625 595" fill="none" stroke="${accentColor}" stroke-width="9" stroke-linecap="round" />
-    </g>
-    <g class="anim-float">
-      <circle cx="230" cy="420" r="24" fill="${accentColor}" />
-      <polygon points="850,330 885,395 815,395" fill="none" stroke="${strokeColor}" stroke-width="7" />
-    </g>
-    <g class="anim-pop">
-      <rect x="330" y="750" width="420" height="72" rx="36" fill="${accentColor}" />
-      <text x="540" y="798" text-anchor="middle" fill="#0F172A" font-size="30" font-weight="900" font-family="system-ui, sans-serif">${escapedLabel}</text>
+    <g class="anim-layer-fg anim-float">
+      <circle cx="170" cy="650" r="26" fill="${accentColor}" opacity="0.88" />
+      <polygon points="895,545 935,618 855,618" fill="none" stroke="${strokeColor}" stroke-width="7" />
+      <circle cx="910" cy="1220" r="18" fill="none" stroke="${accentColor}" stroke-width="6" />
     </g>
   </svg>`;
 };
@@ -1465,7 +1602,15 @@ const AnimatedSvgStage: React.FC<{
   scene: VideoScene;
   theme: VideoTheme;
   animationStyle: AnimationStyle;
-}> = ({ scene, theme, animationStyle }) => {
+  sceneIndex?: number;
+  showBrandHeader?: boolean;
+}> = ({
+  scene,
+  theme,
+  animationStyle,
+  sceneIndex = 0,
+  showBrandHeader = false,
+}) => {
   const rawFrame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
   const frame = getAnimationStyleFrame(rawFrame, animationStyle);
@@ -1478,7 +1623,7 @@ const AnimatedSvgStage: React.FC<{
   const sanitizedSvg = React.useMemo(() => {
     const cleaned = sanitizeSvgScene(scene.svgScene);
     return cleaned || buildFallbackAnimatedSvg(scene, theme, animationStyle);
-  }, [scene.svgScene, scene.badge, scene.calloutText, theme, animationStyle]);
+  }, [scene.svgScene, theme, animationStyle]);
 
   const scopedCss = React.useMemo(() => {
     const scope = `[data-anim-stage="${stageId}"]`;
@@ -1489,6 +1634,25 @@ const AnimatedSvgStage: React.FC<{
         max-width: 100%;
         max-height: 100%;
         display: block;
+        overflow: visible;
+      }
+      ${scope} svg g {
+        overflow: visible;
+      }
+      ${scope} .anim-layer-bg {
+        transform-box: fill-box;
+        transform-origin: center center;
+        transform: translate3d(var(--anim-layer-bg-x, 0px), var(--anim-layer-bg-y, 0px), 0) scale(var(--anim-layer-bg-scale, 1.03));
+      }
+      ${scope} .anim-layer-mid {
+        transform-box: fill-box;
+        transform-origin: center center;
+        transform: translate3d(var(--anim-layer-mid-x, 0px), var(--anim-layer-mid-y, 0px), 0);
+      }
+      ${scope} .anim-layer-fg {
+        transform-box: fill-box;
+        transform-origin: center center;
+        transform: translate3d(var(--anim-layer-fg-x, 0px), var(--anim-layer-fg-y, 0px), 0) scale(var(--anim-layer-fg-scale, 1.02));
       }
       ${scope} .anim-bob {
         transform-box: fill-box;
@@ -1497,27 +1661,27 @@ const AnimatedSvgStage: React.FC<{
       }
       ${scope} .anim-walk-leg-l {
         transform-box: fill-box;
-        transform-origin: top center;
+        transform-origin: 50% 8%;
         transform: rotate(var(--anim-leg-l-rot, 0deg));
       }
       ${scope} .anim-walk-leg-r {
         transform-box: fill-box;
-        transform-origin: top center;
+        transform-origin: 50% 8%;
         transform: rotate(var(--anim-leg-r-rot, 0deg));
       }
       ${scope} .anim-arm-l {
         transform-box: fill-box;
-        transform-origin: top center;
+        transform-origin: 50% 8%;
         transform: rotate(var(--anim-arm-l-rot, 0deg));
       }
       ${scope} .anim-arm-r {
         transform-box: fill-box;
-        transform-origin: top center;
+        transform-origin: 50% 8%;
         transform: rotate(var(--anim-arm-r-rot, 0deg));
       }
       ${scope} .anim-head {
         transform-box: fill-box;
-        transform-origin: bottom center;
+        transform-origin: 50% 90%;
         transform: translateY(var(--anim-head-y, 0px)) rotate(var(--anim-head-rot, 0deg));
       }
       ${scope} .anim-enter-left {
@@ -1563,12 +1727,12 @@ const AnimatedSvgStage: React.FC<{
   }, [stageId]);
 
   const t = frame / Math.max(1, fps);
-  const bobY = Math.sin(t * Math.PI * 2 * 0.85) * 6;
-  const walkAngle = Math.sin(t * Math.PI * 2 * 1.6) * 16;
-  const armLAngle = -Math.sin(t * Math.PI * 2 * 1.6) * 14;
-  const armRAngle = Math.sin(t * Math.PI * 2 * 1.4 + 0.5) * 15;
-  const headRot = Math.sin(t * Math.PI * 2 * 0.9 + 0.4) * 4.5;
-  const headY = Math.sin(t * Math.PI * 2 * 1.8) * 2.5;
+  const bobY = Math.sin(t * Math.PI * 2 * 0.65) * 5.5;
+  const walkAngle = Math.sin(t * Math.PI * 2 * 0.95) * 8.5;
+  const armLAngle = -Math.sin(t * Math.PI * 2 * 0.95) * 10;
+  const armRAngle = Math.sin(t * Math.PI * 2 * 0.85 + 0.45) * 10.5;
+  const headRot = Math.sin(t * Math.PI * 2 * 0.65 + 0.35) * 3.8;
+  const headY = Math.sin(t * Math.PI * 2 * 1.3) * 1.8;
 
   const enterSpring = spring({
     frame: Math.max(0, frame - 2),
@@ -1612,7 +1776,7 @@ const AnimatedSvgStage: React.FC<{
   });
 
   const floatX = Math.cos(t * Math.PI * 2 * 0.4) * 6;
-  const floatY = Math.sin(t * Math.PI * 2 * 0.6) * 12;
+  const floatY = Math.sin(t * Math.PI * 2 * 0.6) * 11;
   const floatRot = Math.sin(t * Math.PI * 2 * 0.45) * 3;
 
   const pulseWave = 0.5 + 0.5 * Math.sin(t * Math.PI * 2 * 1.1);
@@ -1621,7 +1785,7 @@ const AnimatedSvgStage: React.FC<{
 
   const panProgress = interpolate(
     frame,
-    [0, Math.max(1, durationInFrames)],
+    [0, Math.max(1, durationInFrames - 1)],
     [0, 1],
     {
       extrapolateLeft: "clamp",
@@ -1629,6 +1793,45 @@ const AnimatedSvgStage: React.FC<{
     }
   );
   const panX = interpolate(panProgress, [0, 1], [-24, 24]);
+
+  const smoothCamCycle: CameraMotion[] = ["zoom-in", "pan-right", "zoom-out", "pan-left"];
+  const activeCamMotion: CameraMotion =
+    scene.cameraMotion && scene.cameraMotion !== "impact-punch"
+      ? scene.cameraMotion
+      : smoothCamCycle[sceneIndex % smoothCamCycle.length];
+
+  let camScale = 1.0;
+  let camX = 0;
+  let camY = 0;
+  if (activeCamMotion === "zoom-in") {
+    camScale = interpolate(panProgress, [0, 1], [1.0, 1.07]);
+    camY = interpolate(panProgress, [0, 1], [0, -6]);
+  } else if (activeCamMotion === "zoom-out") {
+    camScale = interpolate(panProgress, [0, 1], [1.07, 1.0]);
+    camY = interpolate(panProgress, [0, 1], [-6, 0]);
+  } else if (activeCamMotion === "pan-left") {
+    camScale = 1.05;
+    camX = interpolate(panProgress, [0, 1], [24, -24]);
+  } else if (activeCamMotion === "pan-right") {
+    camScale = 1.05;
+    camX = interpolate(panProgress, [0, 1], [-24, 24]);
+  }
+
+  const brandShiftY = showBrandHeader ? 56 : 0;
+  const panDir =
+    activeCamMotion === "pan-left"
+      ? -1
+      : activeCamMotion === "pan-right"
+      ? 1
+      : sceneIndex % 2 === 0
+      ? 1
+      : -1;
+  const layerBgX = interpolate(panProgress, [0, 1], [10 * panDir, -10 * panDir]);
+  const layerBgY = interpolate(panProgress, [0, 1], [-4, 4]);
+  const layerMidX = interpolate(panProgress, [0, 1], [-3 * panDir, 3 * panDir]);
+  const layerMidY = Math.sin(t * Math.PI * 2 * 0.35) * 3;
+  const layerFgX = interpolate(panProgress, [0, 1], [-18 * panDir, 18 * panDir]);
+  const layerFgY = Math.cos(t * Math.PI * 2 * 0.4) * 5;
 
   const cssVars = {
     "--anim-bob-y": `${bobY.toFixed(2)}px`,
@@ -1651,6 +1854,14 @@ const AnimatedSvgStage: React.FC<{
     "--anim-pulse-opacity": `${pulseOpacity.toFixed(3)}`,
     "--anim-pan-x": `${panX.toFixed(2)}px`,
     "--anim-pan-scale": "1.06",
+    "--anim-layer-bg-x": `${layerBgX.toFixed(2)}px`,
+    "--anim-layer-bg-y": `${layerBgY.toFixed(2)}px`,
+    "--anim-layer-bg-scale": "1.03",
+    "--anim-layer-mid-x": `${layerMidX.toFixed(2)}px`,
+    "--anim-layer-mid-y": `${layerMidY.toFixed(2)}px`,
+    "--anim-layer-fg-x": `${layerFgX.toFixed(2)}px`,
+    "--anim-layer-fg-y": `${layerFgY.toFixed(2)}px`,
+    "--anim-layer-fg-scale": "1.02",
   } as React.CSSProperties;
 
   const stageFilter =
@@ -1663,15 +1874,12 @@ const AnimatedSvgStage: React.FC<{
     {
       "data-anim-stage": stageId,
       style: {
-        position: "relative",
+        position: "absolute",
+        inset: 0,
         width: "100%",
         height: "100%",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-        padding: animationStyle === "neon-sketch" ? 8 : 0,
-        boxSizing: "border-box",
+        overflow: "visible",
+        zIndex: 4,
         ...(animationStyle === "pixel-art"
           ? { imageRendering: "pixelated" as const }
           : {}),
@@ -1683,15 +1891,140 @@ const AnimatedSvgStage: React.FC<{
       style: {
         width: "100%",
         height: "100%",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
+        overflow: "visible",
         filter: stageFilter,
+        transformOrigin: "50% 50%",
+        transform: `translate3d(${camX.toFixed(2)}px, ${(camY + brandShiftY).toFixed(2)}px, 0) scale(${camScale.toFixed(4)})`,
       },
       dangerouslySetInnerHTML: { __html: sanitizedSvg },
     })
   );
 };
+
+const AMBIENT_PARTICLE_SEEDS = [
+  { x: 110, y: 280, size: 6, speed: 0.9 },
+  { x: 260, y: 520, size: 9, speed: 1.1 },
+  { x: 430, y: 390, size: 5, speed: 0.75 },
+  { x: 690, y: 310, size: 8, speed: 1.05 },
+  { x: 920, y: 460, size: 7, speed: 0.85 },
+  { x: 160, y: 820, size: 10, speed: 1.15 },
+  { x: 350, y: 980, size: 5, speed: 0.8 },
+  { x: 610, y: 760, size: 8, speed: 0.95 },
+  { x: 840, y: 890, size: 11, speed: 1.2 },
+  { x: 970, y: 740, size: 6, speed: 0.7 },
+  { x: 140, y: 1240, size: 7, speed: 1.0 },
+  { x: 380, y: 1410, size: 10, speed: 0.85 },
+  { x: 560, y: 1190, size: 5, speed: 1.1 },
+  { x: 760, y: 1360, size: 8, speed: 0.9 },
+  { x: 930, y: 1510, size: 6, speed: 1.05 },
+  { x: 230, y: 1580, size: 7, speed: 0.78 },
+];
+
+const AmbientParticles: React.FC<{
+  animationStyle: AnimationStyle;
+  theme: VideoTheme;
+  sceneIndex: number;
+  frame: number;
+}> = ({ animationStyle, theme, sceneIndex, frame }) => {
+  return h(
+    AbsoluteFill,
+    {
+      style: {
+        pointerEvents: "none",
+        zIndex: 7,
+        overflow: "hidden",
+      },
+    },
+    AMBIENT_PARTICLE_SEEDS.map((seed, idx) => {
+      const dx =
+        noise2D(`ap-x-${sceneIndex}-${idx}`, frame * 0.008 * seed.speed, idx * 0.31) * 56;
+      const dy =
+        noise2D(`ap-y-${sceneIndex}-${idx}`, idx * 0.47, frame * 0.007 * seed.speed) * 68;
+      const pulse =
+        0.5 +
+        0.5 *
+          noise2D(`ap-p-${sceneIndex}-${idx}`, frame * 0.016, idx * 0.79);
+
+      let backgroundColor = "rgba(255, 255, 255, 0.35)";
+      let boxShadow: string | undefined;
+      let borderRadius: number | string = 999;
+      let border: string | undefined;
+      let transformExtra = "";
+      let opacity = 0.16 + pulse * 0.28;
+      let size = seed.size;
+
+      if (animationStyle === "cgi") {
+        const isWarm = idx % 3 === 0;
+        backgroundColor = isWarm ? "rgba(253, 224, 71, 0.7)" : "rgba(186, 230, 253, 0.78)";
+        boxShadow = isWarm
+          ? "0 0 16px rgba(253, 224, 71, 0.6)"
+          : "0 0 18px rgba(56, 189, 248, 0.65)";
+        opacity = 0.2 + pulse * 0.36;
+        size = seed.size * 1.15;
+      } else if (animationStyle === "neon-sketch") {
+        const isCyan = idx % 2 === 0;
+        backgroundColor = isCyan ? "#22D3EE" : "#F59E0B";
+        boxShadow = isCyan
+          ? "0 0 14px rgba(34, 211, 238, 0.85)"
+          : "0 0 14px rgba(245, 158, 11, 0.85)";
+        opacity = 0.24 + pulse * 0.42;
+      } else if (animationStyle === "chalkboard") {
+        backgroundColor = idx % 3 === 0 ? "#FDE68A" : "#F8FAFC";
+        size = Math.max(3, seed.size * 0.65);
+        opacity = 0.14 + pulse * 0.24;
+      } else if (animationStyle === "flat-vector") {
+        backgroundColor = idx % 2 === 0 ? theme.accentColor : "#FFFFFF";
+        opacity = 0.16 + pulse * 0.22;
+      } else if (animationStyle === "minimal-line") {
+        backgroundColor = "#0F172A";
+        size = Math.max(4, seed.size * 0.68);
+        opacity = 0.08 + pulse * 0.14;
+      } else if (animationStyle === "3d-explainer") {
+        backgroundColor = idx % 2 === 0 ? theme.accentColor : "#818CF8";
+        boxShadow = "0 4px 12px rgba(99, 102, 241, 0.22)";
+        opacity = 0.16 + pulse * 0.22;
+        size = seed.size * 1.25;
+      } else if (animationStyle === "pixel-art") {
+        backgroundColor = idx % 2 === 0 ? "#22D3EE" : theme.accentColor;
+        borderRadius = 0;
+        size = seed.size <= 7 ? 6 : 8;
+        opacity = 0.2 + pulse * 0.32;
+      } else if (animationStyle === "ps2-retro") {
+        backgroundColor = idx % 2 === 0 ? "#38BDF8" : "#C084FC";
+        borderRadius = 2;
+        transformExtra = " rotate(45deg)";
+        opacity = 0.18 + pulse * 0.3;
+      } else if (animationStyle === "lego") {
+        backgroundColor = idx % 2 === 0 ? theme.accentColor : "#FFFFFF";
+        opacity = 0.22 + pulse * 0.26;
+      } else if (animationStyle === "comic") {
+        backgroundColor = idx % 2 === 0 ? "#FFE135" : "#FFFFFF";
+        border = "1.5px solid #0F172A";
+        opacity = 0.22 + pulse * 0.28;
+      }
+
+      return h("div", {
+        key: idx,
+        style: {
+          position: "absolute",
+          left: seed.x,
+          top: seed.y,
+          width: size,
+          height: size,
+          borderRadius,
+          backgroundColor,
+          boxShadow,
+          border,
+          opacity,
+          transform: `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0)${transformExtra}`,
+        },
+      });
+    })
+  );
+};
+
+const normalizeSceneLabel = (value?: string): string =>
+  (value || "").trim().replace(/\s+/g, " ").toLowerCase();
 
 const StyleBackdrop: React.FC<{
   animationStyle: AnimationStyle;
@@ -1723,13 +2056,24 @@ const StyleBackdrop: React.FC<{
   const driftX = Math.sin(frame * 0.02 + sceneIndex) * 28;
   const driftY = Math.cos(frame * 0.018 + sceneIndex) * 24;
   const gridShift = (frame * 0.7) % 36;
+  const isLight = isLightAnimationStyle(animationStyle);
+  const isComic = animationStyle === "comic";
+
   const bubbleSpring = spring({
     frame: Math.max(0, frame - 10),
     fps,
     config: { damping: 12, stiffness: 210 },
   });
 
-  const frameTop = showBrandHeader ? BRAND_HEADER_HEIGHT + 10 : 14;
+  const midPillTrigger = Math.min(
+    36,
+    Math.max(16, Math.round(durationInFrames * 0.34))
+  );
+  const midPillSpring = spring({
+    frame: Math.max(0, frame - midPillTrigger),
+    fps,
+    config: { damping: 12, stiffness: 215 },
+  });
 
   const renderBackgroundLayer = () => {
     switch (animationStyle) {
@@ -1946,46 +2290,43 @@ const StyleBackdrop: React.FC<{
   const renderForegroundOverlays = () => {
     const overlays: React.ReactNode[] = [];
 
-    if (animationStyle === "chalkboard") {
-      overlays.push(
-        h("div", {
-          key: "chalk-frame",
-          style: {
-            position: "absolute",
-            top: frameTop,
-            left: 14,
-            right: 14,
-            bottom: 14,
-            borderRadius: 34,
-            border: "16px solid #7C4D2B",
-            boxShadow:
-              "inset 0 0 0 4px #4A2B15, inset 0 10px 28px rgba(0,0,0,0.55), 0 8px 24px rgba(0,0,0,0.45)",
-            pointerEvents: "none",
-            zIndex: 15,
-          },
-        })
-      );
-    }
-
-    if (animationStyle === "comic") {
-      overlays.push(
-        h("div", {
-          key: "comic-frame",
-          style: {
-            position: "absolute",
-            top: frameTop,
-            left: 16,
-            right: 16,
-            bottom: 16,
-            borderRadius: 22,
-            border: "11px solid #0F172A",
-            boxShadow: "inset 0 0 0 5px #FFFFFF",
-            pointerEvents: "none",
-            zIndex: 15,
-          },
-        })
-      );
-    }
+    // Subtle full-bleed top & bottom scrims for crisp title and subtitle legibility.
+    overlays.push(
+      h("div", {
+        key: "top-scrim",
+        style: {
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: showBrandHeader ? BRAND_HEADER_HEIGHT + 340 : 380,
+          background: isLight
+            ? "linear-gradient(180deg, rgba(248, 250, 252, 0.78) 0%, rgba(248, 250, 252, 0.42) 55%, rgba(248, 250, 252, 0) 100%)"
+            : isComic
+            ? "linear-gradient(180deg, rgba(10, 14, 24, 0.56) 0%, rgba(10, 14, 24, 0.26) 56%, rgba(10, 14, 24, 0) 100%)"
+            : "linear-gradient(180deg, rgba(6, 10, 18, 0.72) 0%, rgba(6, 10, 18, 0.38) 56%, rgba(6, 10, 18, 0) 100%)",
+          pointerEvents: "none",
+          zIndex: 12,
+        },
+      }),
+      h("div", {
+        key: "bottom-scrim",
+        style: {
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 430,
+          background: isLight
+            ? "linear-gradient(0deg, rgba(241, 245, 249, 0.84) 0%, rgba(241, 245, 249, 0.44) 56%, rgba(241, 245, 249, 0) 100%)"
+            : isComic
+            ? "linear-gradient(0deg, rgba(10, 14, 24, 0.66) 0%, rgba(10, 14, 24, 0.32) 58%, rgba(10, 14, 24, 0) 100%)"
+            : "linear-gradient(0deg, rgba(6, 10, 18, 0.8) 0%, rgba(6, 10, 18, 0.42) 58%, rgba(6, 10, 18, 0) 100%)",
+          pointerEvents: "none",
+          zIndex: 12,
+        },
+      })
+    );
 
     if (animationStyle === "pixel-art") {
       overlays.push(
@@ -2008,7 +2349,7 @@ const StyleBackdrop: React.FC<{
           key: "ps2-vignette",
           style: {
             backgroundImage:
-              "radial-gradient(circle at 50% 48%, transparent 50%, rgba(2, 6, 23, 0.62) 100%), repeating-radial-gradient(circle at 17% 32%, rgba(255,255,255,0.03) 0px, transparent 2px)",
+              "radial-gradient(circle at 50% 48%, transparent 50%, rgba(2, 6, 23, 0.56) 100%), repeating-radial-gradient(circle at 17% 32%, rgba(255,255,255,0.03) 0px, transparent 2px)",
             pointerEvents: "none",
             zIndex: 15,
           },
@@ -2022,7 +2363,7 @@ const StyleBackdrop: React.FC<{
           key: "cgi-vignette",
           style: {
             background:
-              "radial-gradient(circle at 50% 44%, transparent 44%, rgba(2, 6, 23, 0.72) 100%)",
+              "radial-gradient(circle at 50% 44%, transparent 46%, rgba(2, 6, 23, 0.62) 100%)",
             pointerEvents: "none",
             zIndex: 15,
           },
@@ -2030,23 +2371,35 @@ const StyleBackdrop: React.FC<{
       );
     }
 
-    if (scene.speechBubble?.trim()) {
-      const isComic = animationStyle === "comic";
+    const badgeNorm = normalizeSceneLabel(scene.badge);
+    const speechText = scene.speechBubble?.trim() || "";
+    const calloutText = scene.calloutText?.trim() || "";
+
+    if (isComic && speechText) {
+      const estTitleLines = Math.min(
+        3,
+        Math.max(1, Math.ceil((scene.title || "").trim().length / 26))
+      );
+      const bubbleTop = showBrandHeader
+        ? BRAND_HEADER_HEIGHT + 110 + estTitleLines * 50
+        : 130 + estTitleLines * 56;
+      const alignLeft = sceneIndex % 2 === 1;
+
       overlays.push(
         h(
           "div",
           {
-            key: "speech-bubble",
+            key: "comic-speech-bubble",
             style: {
               position: "absolute",
-              top: showBrandHeader ? BRAND_HEADER_HEIGHT + 215 : 235,
-              right: 46,
+              top: Math.min(showBrandHeader ? 470 : 390, bubbleTop),
+              ...(alignLeft ? { left: 44 } : { right: 44 }),
               maxWidth: 480,
               zIndex: 25,
               pointerEvents: "none",
               opacity: bubbleSpring,
               transform: `scale(${interpolate(bubbleSpring, [0, 1], [0.7, 1])}) translateY(${interpolate(bubbleSpring, [0, 1], [16, 0])}px)`,
-              transformOrigin: "bottom left",
+              transformOrigin: alignLeft ? "bottom right" : "bottom left",
             },
           },
           h(
@@ -2056,34 +2409,114 @@ const StyleBackdrop: React.FC<{
                 position: "relative",
                 backgroundColor: "#FFFFFF",
                 color: "#0F172A",
-                border: isComic ? "5px solid #0F172A" : "3px solid #1E293B",
-                borderRadius: isComic ? 26 : 24,
+                border: "5px solid #0F172A",
+                borderRadius: 26,
                 padding: "16px 24px",
                 fontSize: 28,
                 fontWeight: 900,
-                lineHeight: 1.22,
-                boxShadow: isComic
-                  ? "6px 6px 0 #0F172A"
-                  : "0 14px 32px rgba(15, 23, 42, 0.25)",
+                lineHeight: 1.2,
+                boxShadow: "7px 7px 0 #0F172A",
               },
             },
-            scene.speechBubble.trim(),
+            speechText,
             h("div", {
               style: {
                 position: "absolute",
                 bottom: -18,
-                left: 36,
+                ...(alignLeft ? { right: 42 } : { left: 42 }),
                 width: 24,
                 height: 24,
                 backgroundColor: "#FFFFFF",
-                borderRight: isComic ? "5px solid #0F172A" : "3px solid #1E293B",
-                borderBottom: isComic ? "5px solid #0F172A" : "3px solid #1E293B",
+                borderRight: "5px solid #0F172A",
+                borderBottom: "5px solid #0F172A",
                 transform: "rotate(45deg)",
               },
             })
           )
         )
       );
+    } else if (!isComic) {
+      const pillText =
+        (speechText && normalizeSceneLabel(speechText) !== badgeNorm
+          ? speechText
+          : "") ||
+        (calloutText && normalizeSceneLabel(calloutText) !== badgeNorm
+          ? calloutText
+          : "");
+
+      if (pillText && frame >= midPillTrigger) {
+        overlays.push(
+          h(
+            "div",
+            {
+              key: "editorial-glass-pill",
+              style: {
+                position: "absolute",
+                bottom: 345,
+                left: 48,
+                right: 48,
+                display: "flex",
+                justifyContent: "center",
+                pointerEvents: "none",
+                zIndex: 25,
+              },
+            },
+            h(
+              "div",
+              {
+                style: {
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 14,
+                  maxWidth: "90%",
+                  padding: "14px 28px",
+                  borderRadius: 999,
+                  backgroundColor: isLight
+                    ? "rgba(255, 255, 255, 0.76)"
+                    : "rgba(12, 18, 28, 0.62)",
+                  backdropFilter: "blur(14px)",
+                  WebkitBackdropFilter: "blur(14px)",
+                  border: isLight
+                    ? `2px solid ${animationStyle === "minimal-line" ? "#0F172A" : theme.accentColor}`
+                    : `1.5px solid ${theme.accentColor}99`,
+                  boxShadow: isLight
+                    ? "0 12px 28px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.9)"
+                    : `0 14px 34px rgba(0, 0, 0, 0.44), 0 0 22px ${theme.accentColor}26, inset 0 1px 0 rgba(255, 255, 255, 0.18)`,
+                  opacity: midPillSpring,
+                  transform: `translateY(${interpolate(midPillSpring, [0, 1], [24, 0])}px) scale(${interpolate(midPillSpring, [0, 1], [0.88, 1])})`,
+                },
+              },
+              h("span", {
+                style: {
+                  width: 12,
+                  height: 12,
+                  borderRadius: 999,
+                  flexShrink: 0,
+                  backgroundColor:
+                    animationStyle === "minimal-line"
+                      ? "#0F172A"
+                      : theme.accentColor,
+                  boxShadow: isLight ? "none" : `0 0 12px ${theme.accentColor}`,
+                },
+              }),
+              h(
+                "span",
+                {
+                  style: {
+                    fontSize: 29,
+                    fontWeight: 800,
+                    letterSpacing: 0.8,
+                    color: isLight ? "#0F172A" : "#FFFFFF",
+                    textAlign: "center",
+                    lineHeight: 1.2,
+                  },
+                },
+                pillText
+              )
+            )
+          )
+        );
+      }
     }
 
     return overlays;
@@ -2098,6 +2531,12 @@ const StyleBackdrop: React.FC<{
     },
     renderBackgroundLayer(),
     children,
+    h(AmbientParticles, {
+      animationStyle,
+      theme,
+      sceneIndex,
+      frame,
+    }),
     ...renderForegroundOverlays(),
     h(
       "div",
@@ -2109,7 +2548,7 @@ const StyleBackdrop: React.FC<{
           right: 44,
           height: 6,
           borderRadius: 999,
-          backgroundColor: isLightAnimationStyle(animationStyle)
+          backgroundColor: isLight
             ? "rgba(15, 23, 42, 0.16)"
             : "rgba(255,255,255,0.22)",
           overflow: "hidden",
@@ -2242,105 +2681,81 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
           sceneIndex,
           showBrandHeader,
         },
+        h(AnimatedSvgStage, {
+          scene,
+          theme,
+          animationStyle: activeAnimationStyle,
+          sceneIndex,
+          showBrandHeader,
+        }),
         h(
           "div",
           {
             style: {
               position: "absolute",
               top: showBrandHeader ? BRAND_HEADER_HEIGHT + 34 : 52,
-              bottom: 300,
               left: 42,
               right: 42,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: 14,
-              zIndex: 10,
+              textAlign: "center",
+              gap: 10,
+              pointerEvents: "none",
+              zIndex: 20,
+              opacity: titleSpring,
+              transform: `translateY(${interpolate(titleSpring, [0, 1], [-16, 0])}px)`,
             },
           },
-          h(
-            "div",
-            {
-              style: {
-                flexShrink: 0,
-                width: "100%",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                textAlign: "center",
-                gap: 10,
-                opacity: titleSpring,
-                transform: `translateY(${interpolate(titleSpring, [0, 1], [-16, 0])}px)`,
-              },
-            },
-            scene.badge
-              ? h(
-                  "div",
-                  {
-                    style: {
-                      display: "inline-block",
-                      padding: "6px 22px",
-                      borderRadius: isComic ? 10 : 999,
-                      backgroundColor: isComic
-                        ? "#FFE135"
-                        : isLightAnimated
-                        ? "#0F172A"
-                        : isNeon
-                        ? "rgba(6, 13, 31, 0.85)"
-                        : "rgba(18, 22, 20, 0.72)",
-                      border: isComic
-                        ? "3px solid #0F172A"
-                        : isNeon
-                        ? "2px solid #22D3EE"
-                        : `2px solid ${isLightAnimated ? "#0F172A" : theme.accentColor}`,
-                      color: isComic
-                        ? "#0F172A"
-                        : isLightAnimated
-                        ? "#FFFFFF"
-                        : isNeon
-                        ? "#22D3EE"
-                        : theme.accentColor,
-                      fontSize: 21,
-                      fontWeight: 900,
-                      letterSpacing: 3,
-                      boxShadow: isComic ? "4px 4px 0 #0F172A" : undefined,
-                    },
+          scene.badge
+            ? h(
+                "div",
+                {
+                  style: {
+                    display: "inline-block",
+                    padding: "6px 22px",
+                    borderRadius: isComic ? 10 : 999,
+                    backgroundColor: isComic
+                      ? "#FFE135"
+                      : isLightAnimated
+                      ? "#0F172A"
+                      : isNeon
+                      ? "rgba(6, 13, 31, 0.85)"
+                      : "rgba(18, 22, 20, 0.72)",
+                    border: isComic
+                      ? "3px solid #0F172A"
+                      : isNeon
+                      ? "2px solid #22D3EE"
+                      : `2px solid ${isLightAnimated ? "#0F172A" : theme.accentColor}`,
+                    color: isComic
+                      ? "#0F172A"
+                      : isLightAnimated
+                      ? "#FFFFFF"
+                      : isNeon
+                      ? "#22D3EE"
+                      : theme.accentColor,
+                    fontSize: 21,
+                    fontWeight: 900,
+                    letterSpacing: 3,
+                    boxShadow: isComic ? "4px 4px 0 #0F172A" : undefined,
                   },
-                  scene.badge
-                )
-              : null,
-            h(
-              "h2",
-              {
-                style: {
-                  margin: 0,
-                  fontSize: showBrandHeader ? 46 : 52,
-                  fontWeight: 900,
-                  lineHeight: 1.06,
-                  color: headlineColor,
-                  textShadow: headlineShadow,
                 },
-              },
-              scene.title
-            )
-          ),
+                scene.badge
+              )
+            : null,
           h(
-            "div",
+            "h2",
             {
               style: {
-                flex: 1,
-                minHeight: 0,
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
+                margin: 0,
+                fontSize: showBrandHeader ? 46 : 52,
+                fontWeight: 900,
+                lineHeight: 1.06,
+                color: headlineColor,
+                textShadow: headlineShadow,
               },
             },
-            h(AnimatedSvgStage, {
-              scene,
-              theme,
-              animationStyle: activeAnimationStyle,
-            })
+            scene.title
           )
         )
       ),
