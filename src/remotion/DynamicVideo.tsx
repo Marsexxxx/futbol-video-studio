@@ -61,6 +61,7 @@ import {
   Zap,
 } from "lucide-react";
 import {
+  AnimationStyle,
   CameraMotion,
   RenderMode,
   SceneLayout,
@@ -166,6 +167,7 @@ type SceneCommonProps = {
   sceneIndex: number;
   renderMode: RenderMode;
   visualStyle?: VisualStyle;
+  animationStyle?: AnimationStyle;
   sfxEnabled: boolean;
   showBrandHeader: boolean;
 };
@@ -173,6 +175,17 @@ type SceneCommonProps = {
 function getStylizedFrame(frame: number, visualStyle?: VisualStyle): number {
   if (visualStyle === "lego") return Math.floor(frame / 3) * 3;
   if (visualStyle === "pixelart") return Math.floor(frame / 2) * 2;
+  return frame;
+}
+
+function getAnimationStyleFrame(
+  frame: number,
+  animationStyle?: AnimationStyle
+): number {
+  if (animationStyle === "lego") return Math.floor(frame / 3) * 3;
+  if (animationStyle === "pixel-art" || animationStyle === "chalkboard") {
+    return Math.floor(frame / 2) * 2;
+  }
   return frame;
 }
 
@@ -377,7 +390,8 @@ const ClassicSubtitle: React.FC<{
   text: string;
   accent: string;
   compact?: boolean;
-}> = ({ text, accent, compact = false }) => {
+  lightMode?: boolean;
+}> = ({ text, accent, compact = false, lightMode = false }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = spring({
@@ -396,16 +410,23 @@ const ClassicSubtitle: React.FC<{
         bottom: compact ? 36 : 94,
         left: compact ? 40 : 52,
         right: compact ? 40 : 52,
-        backgroundColor: "rgba(18, 22, 20, 0.88)",
-        borderLeft: `8px solid ${accent}`,
+        backgroundColor: lightMode
+          ? "rgba(255, 255, 255, 0.95)"
+          : "rgba(18, 22, 20, 0.88)",
+        borderTop: lightMode ? "3px solid #0F172A" : "none",
+        borderRight: lightMode ? "3px solid #0F172A" : "none",
+        borderBottom: lightMode ? "3px solid #0F172A" : "none",
+        borderLeft: lightMode ? "10px solid #0F172A" : `8px solid ${accent}`,
         borderRadius: 18,
         padding: compact ? "16px 24px" : "24px 30px",
         textAlign: "center",
         fontSize: compact ? 30 : 38,
         fontWeight: 800,
-        color: "#FFFFFF",
+        color: lightMode ? "#0F172A" : "#FFFFFF",
         lineHeight: 1.24,
-        boxShadow: "0 16px 38px rgba(0, 0, 0, 0.5)",
+        boxShadow: lightMode
+          ? "0 14px 32px rgba(15, 23, 42, 0.16)"
+          : "0 16px 38px rgba(0, 0, 0, 0.5)",
         fontFamily: "system-ui, -apple-system, sans-serif",
         opacity: enter,
         transform: `translateY(${interpolate(enter, [0, 1], [18, 0])}px)`,
@@ -420,7 +441,8 @@ const DynamicSubtitle: React.FC<{
   accent: string;
   voiceSpeed: number;
   compact?: boolean;
-}> = ({ scene, accent, voiceSpeed, compact = false }) => {
+  lightMode?: boolean;
+}> = ({ scene, accent, voiceSpeed, compact = false, lightMode = false }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
 
@@ -507,8 +529,25 @@ const DynamicSubtitle: React.FC<{
                   : "6px 18px"
                 : "5px 8px",
               borderRadius: 14,
-              backgroundColor: isCurrent ? accent : "rgba(18, 22, 20, 0.72)",
-              color: isCurrent
+              border: lightMode
+                ? isCurrent
+                  ? "2px solid #0F172A"
+                  : "2px solid rgba(15, 23, 42, 0.16)"
+                : undefined,
+              backgroundColor: lightMode
+                ? isCurrent
+                  ? "#0F172A"
+                  : "rgba(255, 255, 255, 0.9)"
+                : isCurrent
+                ? accent
+                : "rgba(18, 22, 20, 0.72)",
+              color: lightMode
+                ? isCurrent
+                  ? "#FFFFFF"
+                  : isSpoken
+                  ? "#0F172A"
+                  : "rgba(15, 23, 42, 0.52)"
+                : isCurrent
                 ? "#111613"
                 : isSpoken
                 ? "#FFFFFF"
@@ -516,8 +555,16 @@ const DynamicSubtitle: React.FC<{
               transform: isCurrent
                 ? `scale(${interpolate(wordSpring, [0, 1], [0.9, 1.08])})`
                 : "scale(1)",
-              textShadow: isCurrent ? "none" : "0 4px 16px rgba(0, 0, 0, 0.9)",
-              boxShadow: isCurrent ? "0 10px 26px rgba(0, 0, 0, 0.45)" : "none",
+              textShadow: lightMode
+                ? "none"
+                : isCurrent
+                ? "none"
+                : "0 4px 16px rgba(0, 0, 0, 0.9)",
+              boxShadow: isCurrent
+                ? lightMode
+                  ? "0 10px 24px rgba(15, 23, 42, 0.25)"
+                  : "0 10px 26px rgba(0, 0, 0, 0.45)"
+                : "none",
             },
           },
           word.text
@@ -533,11 +580,19 @@ const SceneSubtitle: React.FC<{
   voiceSpeed: number;
   subtitleStyle: SubtitleStyle;
   compact?: boolean;
-}> = ({ scene, accent, voiceSpeed, subtitleStyle, compact = false }) => {
+  lightMode?: boolean;
+}> = ({
+  scene,
+  accent,
+  voiceSpeed,
+  subtitleStyle,
+  compact = false,
+  lightMode = false,
+}) => {
   if (subtitleStyle === "classic") {
-    return h(ClassicSubtitle, { text: scene.subtitle, accent, compact });
+    return h(ClassicSubtitle, { text: scene.subtitle, accent, compact, lightMode });
   }
-  return h(DynamicSubtitle, { scene, accent, voiceSpeed, compact });
+  return h(DynamicSubtitle, { scene, accent, voiceSpeed, compact, lightMode });
 };
 
 const EditorialBackdrop: React.FC<{
@@ -1278,6 +1333,801 @@ const FlyerEndStage: React.FC<{
   );
 };
 
+const resolveAnimationStyle = (
+  animationStyle?: AnimationStyle,
+  visualStyle?: VisualStyle
+): AnimationStyle => {
+  if (animationStyle) return animationStyle;
+  if (visualStyle === "pixelart") return "pixel-art";
+  if (visualStyle === "lego") return "lego";
+  return "flat-vector";
+};
+
+const isLightAnimationStyle = (style: AnimationStyle): boolean =>
+  style === "minimal-line" || style === "3d-explainer" || style === "lego";
+
+const sanitizeSvgScene = (rawSvg?: string): string => {
+  if (!rawSvg || typeof rawSvg !== "string") return "";
+
+  let cleaned = rawSvg
+    .trim()
+    .replace(/^```(?:svg|xml|html)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  if (!cleaned) return "";
+
+  let previous = "";
+  while (cleaned !== previous) {
+    previous = cleaned;
+    cleaned = cleaned
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, "")
+      .replace(/<script\b[^>]*\/?>/gi, "")
+      .replace(/<foreignObject\b[^>]*>[\s\S]*?<\/foreignObject\s*>/gi, "")
+      .replace(/<foreignObject\b[^>]*\/?>/gi, "")
+      .replace(/<(iframe|object|embed)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "")
+      .replace(/<(iframe|object|embed)\b[^>]*\/?>/gi, "");
+  }
+
+  cleaned = cleaned
+    .replace(/\s+on[a-z0-9_-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, " ")
+    .replace(
+      /(\s(?:xlink:)?href\s*=\s*)(?:"\s*javascript:[^"]*"|'\s*javascript:[^']*')/gi,
+      '$1"#"'
+    );
+
+  if (/<svg\b/i.test(cleaned)) {
+    cleaned = cleaned.replace(/<svg\b([^>]*)>/i, (_full, attrs: string) => {
+      let nextAttrs = attrs
+        .replace(/\s+(?:width|height)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+        .trim();
+      if (!/\bviewBox\s*=/i.test(nextAttrs)) {
+        nextAttrs = `${nextAttrs} viewBox="0 0 1080 1120"`.trim();
+      }
+      if (!/\bpreserveAspectRatio\s*=/i.test(nextAttrs)) {
+        nextAttrs = `${nextAttrs} preserveAspectRatio="xMidYMid meet"`.trim();
+      }
+      return `<svg ${nextAttrs}>`;
+    });
+  } else {
+    cleaned = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1120" preserveAspectRatio="xMidYMid meet">${cleaned}</svg>`;
+  }
+
+  cleaned = cleaned.replace(
+    /<(path|line|polyline|polygon|rect|circle|ellipse)\b([^>]*?)(\/?)>/gi,
+    (full, tag: string, attrs: string, slash: string) => {
+      if (/\bpathLength\s*=/i.test(attrs) || /stroke-dasharray/i.test(attrs)) {
+        return full;
+      }
+      return `<${tag}${attrs} pathLength="1000"${slash}>`;
+    }
+  );
+
+  return cleaned;
+};
+
+const buildFallbackAnimatedSvg = (
+  scene: VideoScene,
+  theme: VideoTheme,
+  animationStyle: AnimationStyle
+): string => {
+  const isLight = isLightAnimationStyle(animationStyle);
+  const strokeColor =
+    animationStyle === "neon-sketch"
+      ? "#22D3EE"
+      : animationStyle === "chalkboard"
+      ? "#F8FAFC"
+      : isLight
+      ? "#0F172A"
+      : "#FFFFFF";
+  const accentColor =
+    animationStyle === "neon-sketch"
+      ? "#F59E0B"
+      : animationStyle === "chalkboard"
+      ? "#FDE68A"
+      : theme.accentColor;
+  const fillPrimary =
+    animationStyle === "minimal-line" ? "none" : theme.primaryColor;
+
+  const escapedLabel = (scene.calloutText || scene.badge || "ESCENA")
+    .slice(0, 22)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1120" preserveAspectRatio="xMidYMid meet">
+    <g class="anim-pan-bg" opacity="0.24">
+      <circle cx="240" cy="280" r="110" fill="none" stroke="${accentColor}" stroke-width="5" />
+      <circle cx="840" cy="820" r="140" fill="none" stroke="${strokeColor}" stroke-width="4" />
+    </g>
+    <g class="anim-enter-left">
+      <path class="anim-draw" d="M 160 830 Q 540 690 920 830" fill="none" stroke="${accentColor}" stroke-width="8" stroke-linecap="round" />
+    </g>
+    <g class="anim-bob">
+      <circle class="anim-pulse" cx="540" cy="510" r="185" fill="${fillPrimary}" fill-opacity="${animationStyle === "minimal-line" ? "0" : "0.22"}" stroke="${accentColor}" stroke-width="8" />
+      <rect class="anim-draw" x="390" y="360" width="300" height="300" rx="58" fill="${fillPrimary}" fill-opacity="${animationStyle === "minimal-line" ? "0" : "0.75"}" stroke="${strokeColor}" stroke-width="8" />
+      <circle class="anim-head" cx="540" cy="465" r="46" fill="none" stroke="${strokeColor}" stroke-width="8" />
+      <path class="anim-draw" d="M 455 595 C 455 540, 625 540, 625 595" fill="none" stroke="${accentColor}" stroke-width="9" stroke-linecap="round" />
+    </g>
+    <g class="anim-float">
+      <circle cx="230" cy="420" r="24" fill="${accentColor}" />
+      <polygon points="850,330 885,395 815,395" fill="none" stroke="${strokeColor}" stroke-width="7" />
+    </g>
+    <g class="anim-pop">
+      <rect x="330" y="750" width="420" height="72" rx="36" fill="${accentColor}" />
+      <text x="540" y="798" text-anchor="middle" fill="#0F172A" font-size="30" font-weight="900" font-family="system-ui, sans-serif">${escapedLabel}</text>
+    </g>
+  </svg>`;
+};
+
+const AnimatedSvgStage: React.FC<{
+  scene: VideoScene;
+  theme: VideoTheme;
+  animationStyle: AnimationStyle;
+}> = ({ scene, theme, animationStyle }) => {
+  const rawFrame = useCurrentFrame();
+  const { fps, durationInFrames } = useVideoConfig();
+  const frame = getAnimationStyleFrame(rawFrame, animationStyle);
+  const rawId = React.useId();
+  const stageId = React.useMemo(
+    () => `stage-${rawId.replace(/[^a-zA-Z0-9_-]/g, "")}`,
+    [rawId]
+  );
+
+  const sanitizedSvg = React.useMemo(() => {
+    const cleaned = sanitizeSvgScene(scene.svgScene);
+    return cleaned || buildFallbackAnimatedSvg(scene, theme, animationStyle);
+  }, [scene.svgScene, scene.badge, scene.calloutText, theme, animationStyle]);
+
+  const scopedCss = React.useMemo(() => {
+    const scope = `[data-anim-stage="${stageId}"]`;
+    return `
+      ${scope} svg {
+        width: 100%;
+        height: 100%;
+        max-width: 100%;
+        max-height: 100%;
+        display: block;
+      }
+      ${scope} .anim-bob {
+        transform-box: fill-box;
+        transform-origin: center center;
+        transform: translateY(var(--anim-bob-y, 0px));
+      }
+      ${scope} .anim-walk-leg-l {
+        transform-box: fill-box;
+        transform-origin: top center;
+        transform: rotate(var(--anim-leg-l-rot, 0deg));
+      }
+      ${scope} .anim-walk-leg-r {
+        transform-box: fill-box;
+        transform-origin: top center;
+        transform: rotate(var(--anim-leg-r-rot, 0deg));
+      }
+      ${scope} .anim-arm-l {
+        transform-box: fill-box;
+        transform-origin: top center;
+        transform: rotate(var(--anim-arm-l-rot, 0deg));
+      }
+      ${scope} .anim-arm-r {
+        transform-box: fill-box;
+        transform-origin: top center;
+        transform: rotate(var(--anim-arm-r-rot, 0deg));
+      }
+      ${scope} .anim-head {
+        transform-box: fill-box;
+        transform-origin: bottom center;
+        transform: translateY(var(--anim-head-y, 0px)) rotate(var(--anim-head-rot, 0deg));
+      }
+      ${scope} .anim-enter-left {
+        opacity: var(--anim-enter-opacity, 1);
+        transform: translateX(var(--anim-enter-left-x, 0px));
+      }
+      ${scope} .anim-enter-right {
+        opacity: var(--anim-enter-opacity, 1);
+        transform: translateX(var(--anim-enter-right-x, 0px));
+      }
+      ${scope} .anim-pop {
+        transform-box: fill-box;
+        transform-origin: center center;
+        opacity: var(--anim-pop-opacity, 1);
+        transform: scale(var(--anim-pop-scale, 1));
+      }
+      ${scope} .anim-draw {
+        stroke-dasharray: 1000;
+        stroke-dashoffset: calc(var(--anim-draw-inv, 0) * 1000);
+      }
+      ${scope} .anim-draw[pathLength="100"],
+      ${scope} .anim-draw[pathlength="100"] {
+        stroke-dasharray: 100;
+        stroke-dashoffset: calc(var(--anim-draw-inv, 0) * 100);
+      }
+      ${scope} .anim-float {
+        transform-box: fill-box;
+        transform-origin: center center;
+        transform: translate(var(--anim-float-x, 0px), var(--anim-float-y, 0px)) rotate(var(--anim-float-rot, 0deg));
+      }
+      ${scope} .anim-pulse {
+        transform-box: fill-box;
+        transform-origin: center center;
+        opacity: var(--anim-pulse-opacity, 1);
+        transform: scale(var(--anim-pulse-scale, 1));
+      }
+      ${scope} .anim-pan-bg {
+        transform-box: fill-box;
+        transform-origin: center center;
+        transform: translateX(var(--anim-pan-x, 0px)) scale(var(--anim-pan-scale, 1.06));
+      }
+    `;
+  }, [stageId]);
+
+  const t = frame / Math.max(1, fps);
+  const bobY = Math.sin(t * Math.PI * 2 * 0.85) * 6;
+  const walkAngle = Math.sin(t * Math.PI * 2 * 1.6) * 16;
+  const armLAngle = -Math.sin(t * Math.PI * 2 * 1.6) * 14;
+  const armRAngle = Math.sin(t * Math.PI * 2 * 1.4 + 0.5) * 15;
+  const headRot = Math.sin(t * Math.PI * 2 * 0.9 + 0.4) * 4.5;
+  const headY = Math.sin(t * Math.PI * 2 * 1.8) * 2.5;
+
+  const enterSpring = spring({
+    frame: Math.max(0, frame - 2),
+    fps,
+    config:
+      animationStyle === "lego"
+        ? { damping: 10, stiffness: 200, mass: 0.85 }
+        : { damping: 14, stiffness: 150 },
+  });
+  const enterLeftX = interpolate(enterSpring, [0, 1], [-180, 0]);
+  const enterRightX = interpolate(enterSpring, [0, 1], [180, 0]);
+  const enterOpacity = interpolate(enterSpring, [0, 0.35, 1], [0, 1, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  const popStart = Math.min(
+    Math.round(durationInFrames * 0.38),
+    Math.max(12, durationInFrames - 24)
+  );
+  const popSpring = spring({
+    frame: Math.max(0, frame - popStart),
+    fps,
+    config: { damping: 9, stiffness: 220, mass: 0.85 },
+  });
+  const popScale =
+    frame < popStart ? 0.35 : interpolate(popSpring, [0, 1], [0.35, 1]);
+  const popOpacity =
+    frame < popStart
+      ? 0
+      : interpolate(popSpring, [0, 0.35, 1], [0, 1, 1], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        });
+
+  const drawEnd = Math.max(24, Math.round(durationInFrames * 0.65));
+  const drawProgress = interpolate(frame, [4, drawEnd], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
+
+  const floatX = Math.cos(t * Math.PI * 2 * 0.4) * 6;
+  const floatY = Math.sin(t * Math.PI * 2 * 0.6) * 12;
+  const floatRot = Math.sin(t * Math.PI * 2 * 0.45) * 3;
+
+  const pulseWave = 0.5 + 0.5 * Math.sin(t * Math.PI * 2 * 1.1);
+  const pulseScale = 0.96 + pulseWave * 0.08;
+  const pulseOpacity = 0.72 + pulseWave * 0.28;
+
+  const panProgress = interpolate(
+    frame,
+    [0, Math.max(1, durationInFrames)],
+    [0, 1],
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    }
+  );
+  const panX = interpolate(panProgress, [0, 1], [-24, 24]);
+
+  const cssVars = {
+    "--anim-bob-y": `${bobY.toFixed(2)}px`,
+    "--anim-leg-l-rot": `${walkAngle.toFixed(2)}deg`,
+    "--anim-leg-r-rot": `${(-walkAngle).toFixed(2)}deg`,
+    "--anim-arm-l-rot": `${armLAngle.toFixed(2)}deg`,
+    "--anim-arm-r-rot": `${armRAngle.toFixed(2)}deg`,
+    "--anim-head-rot": `${headRot.toFixed(2)}deg`,
+    "--anim-head-y": `${headY.toFixed(2)}px`,
+    "--anim-enter-left-x": `${enterLeftX.toFixed(2)}px`,
+    "--anim-enter-right-x": `${enterRightX.toFixed(2)}px`,
+    "--anim-enter-opacity": `${enterOpacity.toFixed(3)}`,
+    "--anim-pop-scale": `${popScale.toFixed(3)}`,
+    "--anim-pop-opacity": `${popOpacity.toFixed(3)}`,
+    "--anim-draw-inv": `${(1 - drawProgress).toFixed(4)}`,
+    "--anim-float-x": `${floatX.toFixed(2)}px`,
+    "--anim-float-y": `${floatY.toFixed(2)}px`,
+    "--anim-float-rot": `${floatRot.toFixed(2)}deg`,
+    "--anim-pulse-scale": `${pulseScale.toFixed(3)}`,
+    "--anim-pulse-opacity": `${pulseOpacity.toFixed(3)}`,
+    "--anim-pan-x": `${panX.toFixed(2)}px`,
+    "--anim-pan-scale": "1.06",
+  } as React.CSSProperties;
+
+  const stageFilter =
+    animationStyle === "neon-sketch"
+      ? "drop-shadow(0 0 10px rgba(34, 211, 238, 0.72)) drop-shadow(0 0 24px rgba(245, 158, 11, 0.4))"
+      : undefined;
+
+  return h(
+    "div",
+    {
+      "data-anim-stage": stageId,
+      style: {
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+        padding: animationStyle === "neon-sketch" ? 8 : 0,
+        boxSizing: "border-box",
+        ...(animationStyle === "pixel-art"
+          ? { imageRendering: "pixelated" as const }
+          : {}),
+        ...cssVars,
+      },
+    },
+    h("style", null, scopedCss),
+    h("div", {
+      style: {
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        filter: stageFilter,
+      },
+      dangerouslySetInnerHTML: { __html: sanitizedSvg },
+    })
+  );
+};
+
+const StyleBackdrop: React.FC<{
+  animationStyle: AnimationStyle;
+  theme: VideoTheme;
+  scene: VideoScene;
+  sceneIndex: number;
+  showBrandHeader: boolean;
+  children?: React.ReactNode;
+}> = ({
+  animationStyle,
+  theme,
+  scene,
+  sceneIndex,
+  showBrandHeader,
+  children,
+}) => {
+  const rawFrame = useCurrentFrame();
+  const frame = getAnimationStyleFrame(rawFrame, animationStyle);
+  const { fps, durationInFrames } = useVideoConfig();
+  const rawProgress = interpolate(
+    rawFrame,
+    [0, Math.max(1, durationInFrames)],
+    [0, 1],
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    }
+  );
+  const driftX = Math.sin(frame * 0.02 + sceneIndex) * 28;
+  const driftY = Math.cos(frame * 0.018 + sceneIndex) * 24;
+  const gridShift = (frame * 0.7) % 36;
+  const bubbleSpring = spring({
+    frame: Math.max(0, frame - 10),
+    fps,
+    config: { damping: 12, stiffness: 210 },
+  });
+
+  const frameTop = showBrandHeader ? BRAND_HEADER_HEIGHT + 10 : 14;
+
+  const renderBackgroundLayer = () => {
+    switch (animationStyle) {
+      case "chalkboard":
+        return h(
+          AbsoluteFill,
+          { style: { backgroundColor: "#1b3a2d" } },
+          h(AbsoluteFill, {
+            style: {
+              background:
+                "radial-gradient(circle at 30% 25%, rgba(255,255,255,0.06) 0%, transparent 48%), radial-gradient(circle at 75% 70%, rgba(255,255,255,0.05) 0%, transparent 52%), radial-gradient(circle at 50% 50%, transparent 45%, rgba(8, 22, 16, 0.58) 100%)",
+            },
+          })
+        );
+      case "neon-sketch":
+        return h(
+          AbsoluteFill,
+          { style: { backgroundColor: "#060d1f" } },
+          h(AbsoluteFill, {
+            style: {
+              background:
+                "radial-gradient(circle at 50% 42%, rgba(34, 211, 238, 0.14) 0%, rgba(245, 158, 11, 0.06) 45%, transparent 78%)",
+            },
+          }),
+          h(AbsoluteFill, {
+            style: {
+              backgroundImage:
+                "linear-gradient(rgba(34, 211, 238, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(34, 211, 238, 0.08) 1px, transparent 1px), linear-gradient(rgba(34, 211, 238, 0.16) 1.5px, transparent 1.5px), linear-gradient(90deg, rgba(34, 211, 238, 0.16) 1.5px, transparent 1.5px)",
+              backgroundSize: "36px 36px, 36px 36px, 144px 144px, 144px 144px",
+              backgroundPosition: `${gridShift}px ${gridShift}px`,
+            },
+          })
+        );
+      case "comic":
+        return h(
+          AbsoluteFill,
+          {
+            style: {
+              background:
+                "linear-gradient(155deg, #FACC15 0%, #38BDF8 54%, #1D4ED8 100%)",
+            },
+          },
+          h(AbsoluteFill, {
+            style: {
+              backgroundImage:
+                "radial-gradient(rgba(15, 23, 42, 0.2) 2.5px, transparent 2.5px)",
+              backgroundSize: "18px 18px",
+            },
+          })
+        );
+      case "minimal-line":
+        return h(
+          AbsoluteFill,
+          { style: { backgroundColor: "#f8f9fa" } },
+          h(AbsoluteFill, {
+            style: {
+              background:
+                "radial-gradient(circle at 50% 35%, #FFFFFF 0%, #F1F5F9 100%)",
+            },
+          })
+        );
+      case "flat-vector":
+        return h(
+          AbsoluteFill,
+          {
+            style: {
+              background: `linear-gradient(155deg, #0f172a 0%, ${theme.primaryColor}D9 52%, #1e293b 100%)`,
+            },
+          },
+          h("div", {
+            style: {
+              position: "absolute",
+              top: 220 + driftY,
+              left: -140 + driftX,
+              width: 520,
+              height: 520,
+              borderRadius: 999,
+              background: `linear-gradient(135deg, ${theme.accentColor}30, transparent 70%)`,
+            },
+          }),
+          h("div", {
+            style: {
+              position: "absolute",
+              bottom: 240 - driftY,
+              right: -120 - driftX,
+              width: 560,
+              height: 560,
+              borderRadius: 999,
+              background: `linear-gradient(135deg, ${theme.secondaryColor}33, transparent 70%)`,
+            },
+          })
+        );
+      case "pixel-art":
+        return h(
+          AbsoluteFill,
+          {
+            style: {
+              background: "linear-gradient(180deg, #13162b 0%, #1d1b38 60%, #101324 100%)",
+              imageRendering: "pixelated",
+            },
+          },
+          h(AbsoluteFill, {
+            style: {
+              backgroundImage:
+                "linear-gradient(rgba(255,255,255,0.03) 2px, transparent 2px), linear-gradient(90deg, rgba(255,255,255,0.03) 2px, transparent 2px)",
+              backgroundSize: "24px 24px",
+            },
+          })
+        );
+      case "ps2-retro":
+        return h(
+          AbsoluteFill,
+          {
+            style: {
+              background:
+                "linear-gradient(160deg, #091534 0%, #112a5c 45%, #0c1836 100%)",
+            },
+          },
+          h(AbsoluteFill, {
+            style: {
+              background:
+                "linear-gradient(125deg, rgba(56, 189, 248, 0.14) 0%, transparent 38%, rgba(168, 85, 247, 0.12) 72%, transparent 100%)",
+              clipPath: "polygon(0 0, 100% 14%, 82% 100%, 0 86%)",
+            },
+          }),
+          h(AbsoluteFill, {
+            style: {
+              background:
+                "linear-gradient(35deg, rgba(14, 165, 233, 0.1) 12%, transparent 56%)",
+              clipPath: "polygon(18% 0, 100% 0, 100% 100%, 40% 78%)",
+            },
+          })
+        );
+      case "cgi":
+        return h(
+          AbsoluteFill,
+          { style: { backgroundColor: "#070b14" } },
+          h(AbsoluteFill, {
+            style: {
+              background:
+                "radial-gradient(ellipse 76% 52% at 50% 14%, rgba(186, 230, 253, 0.25) 0%, rgba(56, 189, 248, 0.08) 44%, transparent 74%)",
+            },
+          }),
+          h("div", {
+            style: {
+              position: "absolute",
+              top: 0,
+              left: "12%",
+              right: "12%",
+              height: "75%",
+              background:
+                "linear-gradient(180deg, rgba(224, 242, 254, 0.11) 0%, transparent 100%)",
+              clipPath: "polygon(32% 0, 68% 0, 100% 100%, 0% 100%)",
+              pointerEvents: "none",
+            },
+          })
+        );
+      case "lego":
+        return h(
+          AbsoluteFill,
+          {
+            style: {
+              background:
+                "linear-gradient(180deg, #fffbeb 0%, #fef3c7 46%, #e0f2fe 100%)",
+            },
+          },
+          h(AbsoluteFill, {
+            style: {
+              backgroundImage:
+                "radial-gradient(circle at 24px 24px, rgba(255,255,255,0.65) 0px, rgba(255,255,255,0.65) 7px, rgba(180, 140, 60, 0.14) 8px, rgba(180, 140, 60, 0.14) 11px, transparent 12px)",
+              backgroundSize: "48px 48px",
+            },
+          }),
+          h(AbsoluteFill, {
+            style: {
+              background:
+                "radial-gradient(circle at 26% 18%, rgba(254, 240, 138, 0.55) 0%, transparent 55%)",
+            },
+          })
+        );
+      case "3d-explainer":
+      default:
+        return h(
+          AbsoluteFill,
+          {
+            style: {
+              background:
+                "linear-gradient(180deg, #eef2ff 0%, #f8fafc 58%, #e2e8f0 100%)",
+            },
+          },
+          h(AbsoluteFill, {
+            style: {
+              background:
+                "radial-gradient(circle at 50% 34%, rgba(255,255,255,0.92) 0%, rgba(199, 210, 254, 0.22) 60%, transparent 85%)",
+            },
+          }),
+          h("div", {
+            style: {
+              position: "absolute",
+              bottom: 335,
+              left: "18%",
+              right: "18%",
+              height: 58,
+              borderRadius: "50%",
+              background:
+                "radial-gradient(ellipse at center, rgba(15, 23, 42, 0.22) 0%, rgba(15, 23, 42, 0.08) 48%, transparent 75%)",
+              pointerEvents: "none",
+            },
+          })
+        );
+    }
+  };
+
+  const renderForegroundOverlays = () => {
+    const overlays: React.ReactNode[] = [];
+
+    if (animationStyle === "chalkboard") {
+      overlays.push(
+        h("div", {
+          key: "chalk-frame",
+          style: {
+            position: "absolute",
+            top: frameTop,
+            left: 14,
+            right: 14,
+            bottom: 14,
+            borderRadius: 34,
+            border: "16px solid #7C4D2B",
+            boxShadow:
+              "inset 0 0 0 4px #4A2B15, inset 0 10px 28px rgba(0,0,0,0.55), 0 8px 24px rgba(0,0,0,0.45)",
+            pointerEvents: "none",
+            zIndex: 15,
+          },
+        })
+      );
+    }
+
+    if (animationStyle === "comic") {
+      overlays.push(
+        h("div", {
+          key: "comic-frame",
+          style: {
+            position: "absolute",
+            top: frameTop,
+            left: 16,
+            right: 16,
+            bottom: 16,
+            borderRadius: 22,
+            border: "11px solid #0F172A",
+            boxShadow: "inset 0 0 0 5px #FFFFFF",
+            pointerEvents: "none",
+            zIndex: 15,
+          },
+        })
+      );
+    }
+
+    if (animationStyle === "pixel-art") {
+      overlays.push(
+        h(AbsoluteFill, {
+          key: "pixel-scanlines",
+          style: {
+            backgroundImage:
+              "repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.45) 0px, rgba(0, 0, 0, 0.45) 2px, transparent 2px, transparent 6px)",
+            opacity: 0.08,
+            pointerEvents: "none",
+            zIndex: 15,
+          },
+        })
+      );
+    }
+
+    if (animationStyle === "ps2-retro") {
+      overlays.push(
+        h(AbsoluteFill, {
+          key: "ps2-vignette",
+          style: {
+            backgroundImage:
+              "radial-gradient(circle at 50% 48%, transparent 50%, rgba(2, 6, 23, 0.62) 100%), repeating-radial-gradient(circle at 17% 32%, rgba(255,255,255,0.03) 0px, transparent 2px)",
+            pointerEvents: "none",
+            zIndex: 15,
+          },
+        })
+      );
+    }
+
+    if (animationStyle === "cgi") {
+      overlays.push(
+        h(AbsoluteFill, {
+          key: "cgi-vignette",
+          style: {
+            background:
+              "radial-gradient(circle at 50% 44%, transparent 44%, rgba(2, 6, 23, 0.72) 100%)",
+            pointerEvents: "none",
+            zIndex: 15,
+          },
+        })
+      );
+    }
+
+    if (scene.speechBubble?.trim()) {
+      const isComic = animationStyle === "comic";
+      overlays.push(
+        h(
+          "div",
+          {
+            key: "speech-bubble",
+            style: {
+              position: "absolute",
+              top: showBrandHeader ? BRAND_HEADER_HEIGHT + 215 : 235,
+              right: 46,
+              maxWidth: 480,
+              zIndex: 25,
+              pointerEvents: "none",
+              opacity: bubbleSpring,
+              transform: `scale(${interpolate(bubbleSpring, [0, 1], [0.7, 1])}) translateY(${interpolate(bubbleSpring, [0, 1], [16, 0])}px)`,
+              transformOrigin: "bottom left",
+            },
+          },
+          h(
+            "div",
+            {
+              style: {
+                position: "relative",
+                backgroundColor: "#FFFFFF",
+                color: "#0F172A",
+                border: isComic ? "5px solid #0F172A" : "3px solid #1E293B",
+                borderRadius: isComic ? 26 : 24,
+                padding: "16px 24px",
+                fontSize: 28,
+                fontWeight: 900,
+                lineHeight: 1.22,
+                boxShadow: isComic
+                  ? "6px 6px 0 #0F172A"
+                  : "0 14px 32px rgba(15, 23, 42, 0.25)",
+              },
+            },
+            scene.speechBubble.trim(),
+            h("div", {
+              style: {
+                position: "absolute",
+                bottom: -18,
+                left: 36,
+                width: 24,
+                height: 24,
+                backgroundColor: "#FFFFFF",
+                borderRight: isComic ? "5px solid #0F172A" : "3px solid #1E293B",
+                borderBottom: isComic ? "5px solid #0F172A" : "3px solid #1E293B",
+                transform: "rotate(45deg)",
+              },
+            })
+          )
+        )
+      );
+    }
+
+    return overlays;
+  };
+
+  return h(
+    AbsoluteFill,
+    {
+      style: {
+        overflow: "hidden",
+      },
+    },
+    renderBackgroundLayer(),
+    children,
+    ...renderForegroundOverlays(),
+    h(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          top: showBrandHeader ? BRAND_HEADER_HEIGHT + 12 : 28,
+          left: 44,
+          right: 44,
+          height: 6,
+          borderRadius: 999,
+          backgroundColor: isLightAnimationStyle(animationStyle)
+            ? "rgba(15, 23, 42, 0.16)"
+            : "rgba(255,255,255,0.22)",
+          overflow: "hidden",
+          zIndex: 30,
+        },
+      },
+      h("div", {
+        style: {
+          width: `${rawProgress * 100}%`,
+          height: "100%",
+          backgroundColor:
+            animationStyle === "minimal-line" ? "#0F172A" : theme.accentColor,
+        },
+      })
+    )
+  );
+};
+
 const inferLayout = (scene: VideoScene): SceneLayout => {
   if (scene.layout) return scene.layout;
   if (scene.type === "hook") return "hero-impact";
@@ -1315,6 +2165,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
   sceneIndex,
   renderMode,
   visualStyle,
+  animationStyle,
   sfxEnabled,
   showBrandHeader,
 }) => {
@@ -1335,6 +2186,18 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
   const videoSrc = resolveMediaSrc(scene.videoUrl);
   const IconComp = getIconComponent(scene.iconName);
 
+  const hasCustomMedia = Boolean(videoSrc || imgSrc);
+  const hasSvgScene = Boolean(scene.svgScene && scene.svgScene.trim().length > 0);
+  const useAnimatedStage =
+    !isFlyerEnd &&
+    !hasCustomMedia &&
+    (layout === "animated-stage" || hasSvgScene || activeMode === "animated");
+  const activeAnimationStyle = resolveAnimationStyle(
+    animationStyle,
+    activeVisualStyle
+  );
+  const isLightAnimated = isLightAnimationStyle(activeAnimationStyle);
+
   const titleSpring = spring({
     frame: Math.max(0, frame - 2),
     fps,
@@ -1349,6 +2212,147 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
       ? { damping: 8, stiffness: 230, mass: 0.85 }
       : { damping: 13, stiffness: 180 },
   });
+
+  if (useAnimatedStage) {
+    const isComic = activeAnimationStyle === "comic";
+    const isNeon = activeAnimationStyle === "neon-sketch";
+    const headlineColor = isLightAnimated ? "#0F172A" : "#FFFFFF";
+    const headlineShadow = isLightAnimated
+      ? "0 2px 10px rgba(255, 255, 255, 0.85)"
+      : isComic
+      ? "3px 3px 0 #0F172A, -2px -2px 0 #0F172A, 2px -2px 0 #0F172A, -2px 2px 0 #0F172A, 0 8px 18px rgba(0, 0, 0, 0.45)"
+      : isNeon
+      ? "0 0 18px rgba(34, 211, 238, 0.55), 0 4px 16px rgba(0, 0, 0, 0.85)"
+      : "0 6px 22px rgba(0, 0, 0, 0.78)";
+
+    return h(
+      AbsoluteFill,
+      {
+        style: {
+          fontFamily: "system-ui, -apple-system, sans-serif",
+          color: headlineColor,
+        },
+      },
+      h(
+        StyleBackdrop,
+        {
+          animationStyle: activeAnimationStyle,
+          theme,
+          scene,
+          sceneIndex,
+          showBrandHeader,
+        },
+        h(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              top: showBrandHeader ? BRAND_HEADER_HEIGHT + 34 : 52,
+              bottom: 300,
+              left: 42,
+              right: 42,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 14,
+              zIndex: 10,
+            },
+          },
+          h(
+            "div",
+            {
+              style: {
+                flexShrink: 0,
+                width: "100%",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                textAlign: "center",
+                gap: 10,
+                opacity: titleSpring,
+                transform: `translateY(${interpolate(titleSpring, [0, 1], [-16, 0])}px)`,
+              },
+            },
+            scene.badge
+              ? h(
+                  "div",
+                  {
+                    style: {
+                      display: "inline-block",
+                      padding: "6px 22px",
+                      borderRadius: isComic ? 10 : 999,
+                      backgroundColor: isComic
+                        ? "#FFE135"
+                        : isLightAnimated
+                        ? "#0F172A"
+                        : isNeon
+                        ? "rgba(6, 13, 31, 0.85)"
+                        : "rgba(18, 22, 20, 0.72)",
+                      border: isComic
+                        ? "3px solid #0F172A"
+                        : isNeon
+                        ? "2px solid #22D3EE"
+                        : `2px solid ${isLightAnimated ? "#0F172A" : theme.accentColor}`,
+                      color: isComic
+                        ? "#0F172A"
+                        : isLightAnimated
+                        ? "#FFFFFF"
+                        : isNeon
+                        ? "#22D3EE"
+                        : theme.accentColor,
+                      fontSize: 21,
+                      fontWeight: 900,
+                      letterSpacing: 3,
+                      boxShadow: isComic ? "4px 4px 0 #0F172A" : undefined,
+                    },
+                  },
+                  scene.badge
+                )
+              : null,
+            h(
+              "h2",
+              {
+                style: {
+                  margin: 0,
+                  fontSize: showBrandHeader ? 46 : 52,
+                  fontWeight: 900,
+                  lineHeight: 1.06,
+                  color: headlineColor,
+                  textShadow: headlineShadow,
+                },
+              },
+              scene.title
+            )
+          ),
+          h(
+            "div",
+            {
+              style: {
+                flex: 1,
+                minHeight: 0,
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              },
+            },
+            h(AnimatedSvgStage, {
+              scene,
+              theme,
+              animationStyle: activeAnimationStyle,
+            })
+          )
+        )
+      ),
+      h(SceneSubtitle, {
+        scene,
+        accent: theme.accentColor,
+        voiceSpeed,
+        subtitleStyle,
+        lightMode: isLightAnimated,
+      })
+    );
+  }
 
   const leftTarget = Math.min(100, Math.max(1, scene.leftValue ?? 50));
   const rightTarget = Math.min(100, Math.max(1, scene.rightValue ?? 50));
@@ -1516,7 +2520,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
           })
         )
       : null,
-    layout === "story-clean"
+    layout === "story-clean" || layout === "animated-stage"
       ? h(
           "div",
           {
@@ -2205,6 +3209,7 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
   const subtitleStyle: SubtitleStyle = spec.subtitleStyle || "dynamic";
   const renderMode: RenderMode = spec.renderMode || "hybrid";
   const visualStyle: VisualStyle | undefined = spec.visualStyle;
+  const animationStyle: AnimationStyle | undefined = spec.animationStyle;
   const sfxEnabled = spec.sfxEnabled !== false;
   const showBrandHeader = Boolean(spec.showBrandHeader);
   const resolvedGlobalAudio = resolveMediaSrc(audioUrl);
@@ -2237,7 +3242,11 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
         : null;
 
     const sceneNode =
-      scene.type === "tactics"
+      scene.type === "tactics" &&
+      scene.layout !== "animated-stage" &&
+      !scene.svgScene?.trim() &&
+      !scene.imageUrl &&
+      !scene.videoUrl
         ? h(SceneTactics, {
             scene,
             theme,
@@ -2246,6 +3255,7 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
             sceneIndex: index,
             renderMode,
             visualStyle,
+            animationStyle,
             sfxEnabled,
             showBrandHeader,
           })
@@ -2257,6 +3267,7 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
             sceneIndex: index,
             renderMode,
             visualStyle,
+            animationStyle,
             sfxEnabled,
             showBrandHeader,
           });

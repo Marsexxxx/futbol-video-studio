@@ -170,10 +170,73 @@ const TOPIC_HINTS = {
   recruitment: "Enfoque profesional y atractivo de reclutamiento laboral y atracción de talento corporativo/agroindustrial.",
 };
 
+const VALID_ANIMATION_STYLES = [
+  "pixel-art",
+  "chalkboard",
+  "neon-sketch",
+  "ps2-retro",
+  "comic",
+  "flat-vector",
+  "minimal-line",
+  "cgi",
+  "lego",
+  "3d-explainer",
+];
+
+const ANIMATION_STYLE_HINTS = {
+  "pixel-art":
+    "Estilo PIXEL ART: construye personajes, fondos y utilería exclusivamente con rectángulos y cuadrados pequeños (<rect>) alineados en grilla retro 8-bit/16-bit, sin curvas ni bordes redondeados, usando colores sólidos contrastados.",
+  chalkboard:
+    "Estilo PIZARRA (CHALKBOARD): usa trazos blancos (#F8FAFC), crema (#FDE68A) y verde/menta suave (#7EC34A) simulando dibujo a mano con tiza sobre pizarra oscura (fill=\"none\" o rellenos translúcidos suaves, stroke-linecap=\"round\", stroke-width=\"4\" a \"7\"). Aprovecha la clase anim-draw en trazos clave.",
+  "neon-sketch":
+    "Estilo BOCETO LUMINOSO (NEON SKETCH): usa contornos brillantes neón cian (#22D3EE), ámbar (#F59E0B) y magenta (#EC4899) con rellenos oscuros profundos (#060d1f / #0f172a) o translúcidos. Aprovecha anim-draw y anim-pulse.",
+  "ps2-retro":
+    "Estilo PS2 RETRO (LOW-POLY): construye siluetas y objetos con planos geométricos facetados (<polygon>) y sombreado angular de consola 2000s, con colores saturados y brillos geométricos.",
+  comic:
+    "Estilo CÓMIC: usa contornos negros gruesos (stroke=\"#0F172A\", stroke-width=\"6\" a \"9\"), colores planos vibrantes de historieta, líneas cinéticas de acción e incluye speechBubble corto (2 a 4 palabras) cuando aporte humor o impacto.",
+  "flat-vector":
+    "Estilo VECTOR PLANO (EDITORIAL MODERNO): usa formas limpias, proporciones estilizadas modernas y capas planas sin contorno (o contorno mínimo), con paleta limpia y legible.",
+  "minimal-line":
+    "Estilo LÍNEA MINIMALISTA (TINTA SOBRE BLANCO): usa trazos finos oscuros (#0F172A, stroke-width=\"3\" a \"5\", fill=\"none\" o blanco #FFFFFF) con pequeños acentos puntuales de color y sin rellenos oscuros pesados. Aprovecha anim-draw.",
+  cgi:
+    "Estilo CGI DRAMÁTICO: incluye <defs> con <radialGradient> y <linearGradient> para simular volumen 3D, iluminación cenital dramática, reflejos especulares y sombras suaves bajo los elementos. Aprovecha anim-pulse.",
+  lego:
+    "Estilo LEGO (BLOQUES STOP-MOTION): construye personajes y objetos con bloques rectangulares, cabezas cilíndricas con pivote superior, manos en C y pequeños círculos tipo stud en la parte superior de las piezas.",
+  "3d-explainer":
+    "Estilo 3D EXPLICATIVO (ESTUDIO SUAVE): usa formas muy redondeadas, gradientes pastel suaves en <defs>, personajes amigables y sombras ambientales limpias. Incluye speechBubble corto cuando ayude a explicar.",
+};
+
+const buildSvgStageInstructions = (animationStyle, isRecruitment) => `
+INSTRUCCIONES DE DISEÑO PARA "svgScene" (OBLIGATORIO CUANDO APLIQUE):
+- Cada "svgScene" debe ser un <svg viewBox="0 0 1080 1120" xmlns="http://www.w3.org/2000/svg">...</svg> limpio, autocontenido y compacto (ENTRE 25 y 65 primitivas SVG por escena para mantener el JSON rápido y válido).
+- PROHIBIDO usar CSS @keyframes, <style>, <script> o <foreignObject> dentro del SVG.
+- Dibuja personajes, objetos o escenarios MUY reconocibles y fieles al tema pedido (rasgos distintivos reales: peinado, barba, gafas, uniforme/camiseta con colores reales o vestimenta laboral, postura corporal, utilería y expresión facial).
+- NO repitas la misma composición ni diseño entre escenas: cada escena debe ilustrar visualmente la acción exacta de su guion en un encuadre distinto.
+- Organiza las partes móviles en grupos <g> usando estas clases semánticas (úsalas de forma natural según la acción):
+  * Fondo o entorno lento: class="anim-pan-bg"
+  * Torso / cuerpo principal con respiración: class="anim-bob"
+  * Cabeza: class="anim-head"
+  * Piernas opuestas al caminar/correr: class="anim-walk-leg-l" y class="anim-walk-leg-r"
+  * Brazos izquierdo y derecho: class="anim-arm-l" y class="anim-arm-r"
+  * Entrada lateral al iniciar la escena: class="anim-enter-left" o class="anim-enter-right"
+  * Elemento sorpresa o dato que aparece a mitad de escena: class="anim-pop"
+  * Trazos o líneas que se dibujan progresivamente: class="anim-draw"
+  * Objetos flotantes (íconos, nubes, balones, estrellas, documentos): class="anim-float"
+  * Brillo o energía pulsante: class="anim-pulse"
+- Estética obligatoria del SVG (${animationStyle}): ${ANIMATION_STYLE_HINTS[animationStyle] || ANIMATION_STYLE_HINTS["flat-vector"]}
+- Opcionalmente incluye "speechBubble" corto (2 a 4 palabras) cuando aporte dinamismo o claridad.${
+  isRecruitment
+    ? '\n- En Reclutamiento mantén los colores corporativos ASR Group (#008F4C, #7EC34A, #BCD853, #26282A, #FFFFFF) y NUNCA pongas "svgScene" en la escena final "flyer-end".'
+    : ""
+}`;
+
 const RENDER_MODE_HINTS = {
+  animated: `MODO ANIMACIÓN DINÁMICA 100% (ESCENAS SVG POR CÓDIGO):
+- Usa "sceneMode": "animated" y "layout": "animated-stage" en TODAS las escenas (excepto "flyer-end" en reclutamiento).
+- Genera un "svgScene" único, expresivo y adaptado al guion en CADA escena (sin fotos IA; deja "imagePrompt": "").`,
   hybrid: `MODO HÍBRIDO (OBLIGATORIO MEZCLAR):
-- Alterna inteligentemente "sceneMode" entre "hybrid" (imagen visual + ícono dinámico + etiqueta flotante) y "editorial" (motion graphics puro con ícono grande animado, cuadrícula viva y tarjetas editoriales sin foto de fondo).
-- Usa "sceneMode": "editorial" en al menos 2 escenas clave y "hybrid" en las escenas de impacto o narrativa visual.`,
+- Alterna inteligentemente entre escenas visuales ("sceneMode": "hybrid" con "imagePrompt" detallado) y escenas animadas por código ("sceneMode": "editorial", "layout": "animated-stage" con "svgScene" único y expresivo).
+- Incluye al menos 2 escenas clave con "layout": "animated-stage" y "svgScene" único adaptado al guion, sin repetir diseños entre escenas.`,
   editorial: `MODO EDITORIAL / MOTION GRAPHICS:
 - Usa "sceneMode": "editorial" en TODAS las escenas para lograr una estética limpia de motion graphics estilo Vox/Johnny Harris con íconos dinámicos, formas animadas y tarjetas editoriales.`,
   cinematic: `MODO CINEMATOGRÁFICO:
@@ -203,10 +266,19 @@ export default async (req) => {
       voiceSpeed = 1.0,
       topicMode = "auto",
       renderMode = "hybrid",
+      animationStyle = "flat-vector",
       studioMode = "general",
       companyName = "UNIÓN DE PRODUCTORES DE CAÑA DE JOACHÍN",
       flyerDuration = 6,
     } = await req.json();
+
+    const safeAnimationStyle = VALID_ANIMATION_STYLES.includes(animationStyle)
+      ? animationStyle
+      : "flat-vector";
+    const includeSvgStage = renderMode === "animated" || renderMode === "hybrid";
+    const svgStageHint = includeSvgStage
+      ? buildSvgStageInstructions(safeAnimationStyle, studioMode === "recruitment" || topicMode === "recruitment")
+      : "";
 
     const isRecruitment = studioMode === "recruitment" || topicMode === "recruitment";
     const effectiveDuration = extractRequestedDuration(prompt, durationSeconds);
@@ -237,6 +309,7 @@ export default async (req) => {
       ? `Eres director creativo especialista en Employer Branding y videos verticales 9:16 de RECLUTAMIENTO LABORAL para redes sociales (TikTok, Reels, Facebook, WhatsApp Status) en español.
 Empresa que contrata: "${companyName}" (sector agroindustrial / caña de azúcar).
 ${modeHint}
+${svgStageHint}
 
 Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
 {
@@ -251,8 +324,8 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
     {
       "id": "s1",
       "type": "cinematic",
-      "sceneMode": "hybrid" | "editorial" | "cinematic",
-      "layout": "hero-impact" | "story-clean" | "stat-overlay" | "quote-press" | "cta-engage" | "flyer-end",
+      "sceneMode": "animated" | "hybrid" | "editorial" | "cinematic",
+      "layout": "animated-stage" | "hero-impact" | "story-clean" | "stat-overlay" | "quote-press" | "cta-engage" | "flyer-end",
       "cameraMotion": "impact-punch" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right",
       "transition": "slide-left" | "slide-up" | "wipe" | "fade" | "flip",
       "iconName": "briefcase" | "user-check" | "map-pin" | "badge-check" | "phone" | "calendar" | "building" | "check-circle" | "wrench" | "shield" | "trending-up" | "award" | "users" | "target" | "banknote" | "clock" | "sparkles",
@@ -261,8 +334,10 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
       "badge": "ETIQUETA BREVE",
       "title": "TITULAR CLARO Y ATRACTIVO",
       "subtitle": "Locución natural, cercana y profesional en español.",
-      "imagePrompt": "Detailed ENGLISH visual prompt depicting authentic modern agricultural/industrial workplace, friendly Mexican professionals, sugarcane fields, machinery, or modern office matching the exact job role, natural daylight, green and neutral gray color harmony, vertical 9:16 frame, strictly NO text, NO logos, NO borders.",
+      "imagePrompt": "Detailed ENGLISH visual prompt depicting authentic modern agricultural/industrial workplace, friendly Mexican professionals, sugarcane fields, machinery, or modern office matching the exact job role, natural daylight, green and neutral gray color harmony, vertical 9:16 frame, strictly NO text, NO logos, NO borders (or empty string if layout is animated-stage).",
       "fallbackImagePrompt": "Clean modern editorial illustration of the workplace and job role in green and gray tones, vertical 9:16, strictly NO text.",
+      "svgScene": "Solo cuando sceneMode es animated o layout es animated-stage (y NUNCA en flyer-end): <svg viewBox=\"0 0 1080 1120\" xmlns=\"http://www.w3.org/2000/svg\">...</svg> único y expresivo con 25 a 65 primitivas y clases anim-*.",
+      "speechBubble": "Texto muy corto opcional (2 a 4 palabras) para globo de diálogo",
       "highlightValue": "Dato breve si aplica (ej. 100%, INMEDIATA, +BONOS)",
       "stampText": "VACANTE ACTIVA",
       "quoteText": "Beneficio o frase destacada si layout es quote-press",
@@ -276,8 +351,9 @@ REGLAS ESTRICTAS PARA VIDEOS DE RECLUTAMIENTO:
 1. Duración objetivo EXACTA: ${effectiveDuration} segundos.
 2. Genera EXACTAMENTE ${sceneCount} escenas en total:
    - Las primeras ${sceneCount - 1} escenas presentan la vacante de forma dinámica y atractiva:
-     * Escena 1 ("hero-impact"): Gancho directo anunciando que ${companyName} está contratando el puesto exacto.
-     * Escenas intermedias: Alterna dinámicamente entre "story-clean", "cta-engage" (usando bullets para listar 2 requisitos o 2 beneficios clave), "stat-overlay" o "quote-press" para explicar funciones del puesto, requisitos y prestaciones sin sonar aburrido.
+     * Si renderMode es "animated", TODAS las primeras ${sceneCount - 1} escenas deben tener "sceneMode": "animated", "layout": "animated-stage" y un "svgScene" único y diferente en cada escena (y "imagePrompt": "").
+     * Si renderMode es "hybrid", usa "layout": "animated-stage" con "svgScene" en las escenas editoriales/animadas y fotos en las demás.
+     * En otros modos, alterna dinámicamente entre "hero-impact", "story-clean", "cta-engage", "stat-overlay" o "quote-press".
    - LA ÚLTIMA ESCENA (escena #${sceneCount}) DEBE SER OBLIGATORIAMENTE:
      * "layout": "flyer-end"
      * "sceneMode": "editorial"
@@ -285,15 +361,16 @@ REGLAS ESTRICTAS PARA VIDEOS DE RECLUTAMIENTO:
      * "badge": "INFORMACIÓN Y CONTACTO"
      * "title": "POSTÚLATE HOY"
      * "subtitle": Una invitación breve y cálida de cierre (10 a 15 palabras) invitando a revisar el flyer en pantalla, tomar captura o enviar su solicitud.
-     * "imagePrompt": "" (vacío, porque el usuario cargará su flyer oficial aquí).
+     * "imagePrompt": "" (vacío) y SIN "svgScene".
 3. Mantén el campo "subtitle" de las primeras ${sceneCount - 1} escenas entre ${minWordsPerScene} y ${maxWordsPerScene} palabras para respetar los ${effectiveDuration} segundos reales.
 4. Usa SIEMPRE exactamente los colores oficiales verde y gris en "theme": primaryColor "#008F4C", secondaryColor "#7EC34A", accentColor "#BCD853", bgColor "#26282A".
-5. NUNCA uses "type": "tactics" ni "split-versus".
+5. PROHIBIDO usar "type": "tactics" o "layout": "split-versus" salvo que el prompt pida explícitamente comparar cifras/porcentajes o una pizarra táctica de fútbol.
 6. Usa "iconName" laborales relevantes ("briefcase", "user-check", "map-pin", "badge-check", "wrench", "building", "banknote", "shield", "check-circle") y "calloutText" breves y claros.
-7. En "imagePrompt" describe ambientes reales, limpios, seguros y positivos acordes al puesto (campo cañero, taller, oficina administrativa, logística, ingeniería, etc.) SIN texto ni letras en las imágenes.`
+7. En "imagePrompt" (cuando aplique foto) describe ambientes reales, limpios, seguros y positivos acordes al puesto SIN texto ni letras en las imágenes.`
       : `Eres director creativo, guionista y director de motion graphics para videos verticales 9:16 virales en español sobre CUALQUIER temática (TikTok / Reels / YouTube Shorts).
 ${topicHint}
 ${modeHint}
+${svgStageHint}
 
 Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
 {
@@ -307,9 +384,9 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
   "scenes": [
     {
       "id": "s1",
-      "type": "cinematic" | "tactics",
-      "sceneMode": "hybrid" | "editorial" | "cinematic",
-      "layout": "hero-impact" | "story-clean" | "split-versus" | "stat-overlay" | "quote-press" | "cta-engage",
+      "type": "cinematic",
+      "sceneMode": "animated" | "hybrid" | "editorial" | "cinematic",
+      "layout": "animated-stage" | "hero-impact" | "story-clean" | "stat-overlay" | "quote-press" | "cta-engage",
       "cameraMotion": "impact-punch" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right",
       "transition": "slide-left" | "slide-up" | "wipe" | "fade" | "flip",
       "iconName": "trophy" | "file-text" | "scale" | "banknote" | "gavel" | "shield" | "flame" | "zap" | "clock" | "globe" | "brain" | "rocket" | "alert" | "megaphone" | "target" | "trending-up" | "lock" | "eye" | "users" | "crown" | "swords" | "sparkles" | "newspaper" | "briefcase" | "landmark" | "cpu" | "heart" | "compass" | "award" | "radio" | "flag",
@@ -318,18 +395,15 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
       "badge": "ETIQUETA BREVE",
       "title": "TITULAR CON IMPACTO",
       "subtitle": "Locución natural en español ajustada exactamente al límite de palabras.",
-      "imagePrompt": "Detailed ENGLISH visual prompt describing a vertical 9:16 scene matching the exact topic, people/subjects, setting, lighting, and camera angle. Strictly NO text, NO borders.",
+      "imagePrompt": "Detailed ENGLISH visual prompt describing a vertical 9:16 scene matching the exact topic, people/subjects, setting, lighting, and camera angle. Strictly NO text, NO borders (or empty string if layout is animated-stage).",
       "fallbackImagePrompt": "Alternative ENGLISH visual prompt describing the same scene in dramatic editorial style with zero text.",
+      "svgScene": "Cuando sceneMode es animated o layout es animated-stage: <svg viewBox=\"0 0 1080 1120\" xmlns=\"http://www.w3.org/2000/svg\">...</svg> único, expresivo y adaptado al guion (25 a 65 primitivas SVG) con clases anim-*.",
+      "speechBubble": "Texto muy corto opcional (2 a 4 palabras) para globo de diálogo",
       "highlightValue": "Dato corto si aplica",
       "stampText": "CLAVE",
       "quoteText": "Frase corta si layout es quote-press",
       "ctaText": "Llamado a la acción breve si layout es cta-engage",
-      "leftLabel": "Opción A",
-      "leftValue": 70,
-      "rightLabel": "Opción B",
-      "rightValue": 30,
-      "bullets": ["Punto 1", "Punto 2"],
-      "tacticCaption": "Solo si type es tactics."
+      "bullets": ["Punto 1", "Punto 2"]
     }
   ]
 }
@@ -339,13 +413,14 @@ REGLAS ESTRICTAS DE DURACIÓN (CRÍTICO):
 2. Genera EXACTAMENTE ${sceneCount} escenas cuya suma de "durationSeconds" sea ${effectiveDuration} segundos.
 3. Para que la voz narrada dure ${effectiveDuration} segundos reales, el campo "subtitle" de CADA escena debe tener entre ${minWordsPerScene} y ${maxWordsPerScene} palabras (total aproximado de ${targetTotalWords} palabras entre todas las escenas).
 
-REGLAS DE DINAMISMO VISUAL Y COHERENCIA:
-4. Usa "type": "cinematic" en casi todas las escenas. Usa "type": "tactics" ÚNICAMENTE si el usuario pide explicar explícitamente una jugada táctica deportiva en pizarra.
-5. Elige un "iconName" específico y coherente en CADA escena.
-6. Escribe un "calloutText" breve y llamativo (2 a 4 palabras) que refuerce lo que dice la voz a mitad de cada escena.
-7. Varía "layout", "cameraMotion" y "transition" entre escenas consecutivas para que el video tenga ritmo real.
-8. Adapta "theme" a la paleta cromática real del tema.
-9. "imagePrompt" SIEMPRE en inglés, muy específico, encuadre vertical 9:16 limpio con espacio arriba y abajo para títulos/subtítulos, SIN texto ni marcos dentro de la imagen.`;
+REGLAS DE DINAMISMO VISUAL Y ANTI-PLANTILLAS:
+4. PROHIBIDO usar "type": "tactics" (el tablero fijo) salvo que el usuario pida explícitamente "pizarra táctica de fútbol". En cualquier otro caso usa siempre "type": "cinematic".
+5. PROHIBIDO usar "layout": "split-versus" (barras de porcentaje) salvo que el prompt del usuario pida explícitamente comparar dos cifras o porcentajes.
+6. Cuando renderMode sea "animated", TODAS las escenas deben usar "sceneMode": "animated", "layout": "animated-stage" y un "svgScene" único y creativo por escena. En modo "hybrid", usa "layout": "animated-stage" + "svgScene" en las escenas editoriales/animadas sin repetir composiciones.
+7. Elige un "iconName" específico y coherente en CADA escena, y escribe un "calloutText" breve (2 a 4 palabras).
+8. Varía "layout", "cameraMotion" y "transition" entre escenas consecutivas para que el video tenga ritmo real.
+9. Adapta "theme" a la paleta cromática real del tema.
+10. Cuando una escena use foto ("hybrid" o "cinematic"), "imagePrompt" debe ir SIEMPRE en inglés, muy específico, encuadre vertical 9:16 limpio SIN texto ni marcos.`;
 
     const buildPayload = (disableThinking) => ({
       system_instruction: { parts: [{ text: systemInstruction }] },
@@ -353,7 +428,7 @@ REGLAS DE DINAMISMO VISUAL Y COHERENCIA:
       generationConfig: {
         responseMimeType: "application/json",
         temperature: isRecruitment ? 0.68 : 0.78,
-        maxOutputTokens: 9000,
+        maxOutputTokens: 16000,
         ...(disableThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
       },
     });
@@ -425,7 +500,72 @@ REGLAS DE DINAMISMO VISUAL Y COHERENCIA:
     const videoSpec = JSON.parse(cleaned);
     videoSpec.targetDuration = effectiveDuration;
     videoSpec.renderMode = renderMode;
+    videoSpec.animationStyle = safeAnimationStyle;
     videoSpec.studioMode = isRecruitment ? "recruitment" : "general";
+
+    const wantsComparison =
+      /\b(?:compara|comparar|comparaci[oó]n|comparativa|porcentaje|porcentajes|cifras|versus|vs\.?)\b|%/i.test(
+        prompt || ""
+      );
+    const wantsFootballTactics =
+      /pizarra\s+t[aá]ctica(?:\s+de\s+f[uú]tbol)?/i.test(prompt || "");
+
+    const normalizeGeneratedScene = (scene, idx, isLastRecruitment) => {
+      if (isLastRecruitment) {
+        const { svgScene: _s, speechBubble: _b, ...rest } = scene;
+        return {
+          ...rest,
+          type: "cinematic",
+          layout: "flyer-end",
+          sceneMode: "editorial",
+          imagePrompt: "",
+        };
+      }
+
+      const nextType =
+        !wantsFootballTactics && scene.type === "tactics"
+          ? "cinematic"
+          : isRecruitment
+          ? "cinematic"
+          : scene.type || "cinematic";
+
+      const nextSceneMode =
+        renderMode === "animated"
+          ? "animated"
+          : renderMode === "editorial"
+          ? "editorial"
+          : renderMode === "cinematic"
+          ? "cinematic"
+          : scene.sceneMode || (idx % 2 === 1 ? "editorial" : "hybrid");
+
+      const hasSvg = Boolean(
+        typeof scene.svgScene === "string" && scene.svgScene.trim()
+      );
+
+      let nextLayout = scene.layout;
+      if (!wantsComparison && nextLayout === "split-versus") {
+        nextLayout =
+          nextSceneMode === "animated" || hasSvg
+            ? "animated-stage"
+            : "story-clean";
+      }
+      if (nextSceneMode === "animated") {
+        nextLayout = "animated-stage";
+      } else if (renderMode === "hybrid" && hasSvg) {
+        nextLayout = "animated-stage";
+      } else if (!nextLayout && nextType !== "tactics") {
+        nextLayout = "story-clean";
+      }
+
+      return {
+        ...scene,
+        type: nextType,
+        sceneMode: nextSceneMode,
+        layout: nextLayout,
+        imagePrompt:
+          nextSceneMode === "animated" ? "" : scene.imagePrompt || "",
+      };
+    };
 
     let scenes = Array.isArray(videoSpec.scenes) ? videoSpec.scenes : [];
 
@@ -458,40 +598,13 @@ REGLAS DE DINAMISMO VISUAL Y COHERENCIA:
         scenes,
         effectiveDuration,
         Math.max(4, Number(flyerDuration) || 6)
-      ).map((scene, idx, arr) => {
-        const isLast = idx === arr.length - 1;
-        if (isLast) {
-          return {
-            ...scene,
-            type: "cinematic",
-            layout: "flyer-end",
-            sceneMode: "editorial",
-            imagePrompt: "",
-          };
-        }
-        return {
-          ...scene,
-          type: "cinematic",
-          sceneMode:
-            renderMode === "editorial"
-              ? "editorial"
-              : renderMode === "cinematic"
-              ? "cinematic"
-              : scene.sceneMode || (idx % 2 === 1 ? "editorial" : "hybrid"),
-        };
-      });
+      ).map((scene, idx, arr) =>
+        normalizeGeneratedScene(scene, idx, idx === arr.length - 1)
+      );
     } else {
       videoSpec.showBrandHeader = false;
       scenes = normalizeSceneDurations(scenes, effectiveDuration).map(
-        (scene, idx) => ({
-          ...scene,
-          sceneMode:
-            renderMode === "editorial"
-              ? "editorial"
-              : renderMode === "cinematic"
-              ? "cinematic"
-              : scene.sceneMode || (idx % 2 === 1 ? "editorial" : "hybrid"),
-        })
+        (scene, idx) => normalizeGeneratedScene(scene, idx, false)
       );
     }
 

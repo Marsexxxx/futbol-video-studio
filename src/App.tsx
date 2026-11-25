@@ -27,6 +27,7 @@ import {
 } from "./remotion/DynamicVideo";
 import { DEFAULT_VIDEO_SPEC } from "./defaultVideo";
 import {
+  AnimationStyle,
   CameraMotion,
   RenderMode,
   SceneLayout,
@@ -60,9 +61,27 @@ const DURATION_PRESETS = [15, 30, 45, 60, 90];
 const RECRUITMENT_DURATION_PRESETS = [20, 30, 45, 60];
 
 const RENDER_MODE_OPTIONS: { id: RenderMode; label: string }[] = [
+  {
+    id: "animated",
+    label:
+      "Formato: Animación Dinámica 100% (Personajes y escenas por código, sin fotos IA)",
+  },
   { id: "hybrid", label: "Formato: Híbrido (Imágenes/Videos + Íconos dinámicos)" },
   { id: "editorial", label: "Formato: Editorial (Íconos dinámicos + Motion Graphics)" },
   { id: "cinematic", label: "Formato: Cinematográfico (Pantalla completa)" },
+];
+
+const ANIMATION_STYLE_OPTIONS: { id: AnimationStyle; label: string }[] = [
+  { id: "pixel-art", label: "Estilo Animación: Pixel Art" },
+  { id: "chalkboard", label: "Estilo Animación: Estilo Pizarra (Tiza animada)" },
+  { id: "neon-sketch", label: "Estilo Animación: Boceto Luminoso (Neón / Blueprint)" },
+  { id: "ps2-retro", label: "Estilo Animación: Estilo PS2 (Low-Poly Retro)" },
+  { id: "comic", label: "Estilo Animación: Cómic (Viñetas y trazos)" },
+  { id: "flat-vector", label: "Estilo Animación: Vector Plano (Editorial moderno)" },
+  { id: "minimal-line", label: "Estilo Animación: Línea Minimalista (Tinta sobre blanco)" },
+  { id: "cgi", label: "Estilo Animación: CGI (Iluminación dramática)" },
+  { id: "lego", label: "Estilo Animación: Estilo LEGO (Bloques Stop-Motion)" },
+  { id: "3d-explainer", label: "Estilo Animación: 3D Explicativo (Estudio suave)" },
 ];
 
 const TOPIC_OPTIONS: { id: TopicMode; label: string }[] = [
@@ -584,6 +603,7 @@ export function App() {
     subtitleStyle: "dynamic",
     renderMode: "hybrid",
     visualStyle: "editorial",
+    animationStyle: "flat-vector",
     sfxEnabled: true,
     targetDuration: 35,
     studioMode: "general",
@@ -623,6 +643,8 @@ export function App() {
   const [voiceSpeed, setVoiceSpeed] = useState(1.0);
   const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>("dynamic");
   const [visualStyle, setVisualStyle] = useState<VisualStyle>("editorial");
+  const [animationStyle, setAnimationStyle] =
+    useState<AnimationStyle>("flat-vector");
   const [autoVoice, setAutoVoice] = useState(true);
   const [autoImages, setAutoImages] = useState(true);
 
@@ -697,7 +719,9 @@ export function App() {
           : {
               ...scene,
               sceneMode:
-                nextMode === "editorial"
+                nextMode === "animated"
+                  ? "animated"
+                  : nextMode === "editorial"
                   ? "editorial"
                   : nextMode === "cinematic"
                   ? "cinematic"
@@ -706,6 +730,14 @@ export function App() {
                   : "hybrid",
             }
       ),
+    }));
+  };
+
+  const handleAnimationStyleChange = (nextStyle: AnimationStyle) => {
+    setAnimationStyle(nextStyle);
+    setSpec((prev) => ({
+      ...prev,
+      animationStyle: nextStyle,
     }));
   };
 
@@ -810,6 +842,7 @@ export function App() {
       voiceSpeed: selectedSpeed,
       subtitleStyle,
       renderMode: targetSpec.renderMode || renderMode,
+      animationStyle: targetSpec.animationStyle || animationStyle,
       sfxEnabled,
       scenes: updatedScenes,
     };
@@ -908,7 +941,15 @@ export function App() {
           continue;
         }
         const effectiveMode = scene.sceneMode || targetSpec.renderMode || renderMode;
-        if (!forceEditorial && effectiveMode === "editorial") continue;
+        if (
+          !forceEditorial &&
+          (effectiveMode === "editorial" ||
+            effectiveMode === "animated" ||
+            scene.layout === "animated-stage" ||
+            Boolean(scene.svgScene?.trim()))
+        ) {
+          continue;
+        }
 
         setImagesProgress(`Imagen ${i + 1}/${updatedScenes.length}...`);
         const result = await fetchSceneImage(scene, selectedVisualStyle);
@@ -1034,6 +1075,7 @@ export function App() {
           voiceSpeed,
           topicMode,
           renderMode,
+          animationStyle,
           studioMode: "general",
         }),
       });
@@ -1065,6 +1107,7 @@ export function App() {
         subtitleStyle,
         renderMode,
         visualStyle,
+        animationStyle: (data as VideoSpec).animationStyle || animationStyle,
         sfxEnabled,
         studioMode: "general",
         showBrandHeader: false,
@@ -1072,7 +1115,7 @@ export function App() {
       };
       setSpec(currentSpec);
 
-      if (autoImages && renderMode !== "editorial") {
+      if (autoImages && renderMode !== "editorial" && renderMode !== "animated") {
         setLoadingStep("Generando visuales 9:16...");
         currentSpec = await generateAllImages(currentSpec, visualStyle, false);
       }
@@ -1135,6 +1178,7 @@ export function App() {
           voiceSpeed,
           topicMode: "recruitment",
           renderMode,
+          animationStyle,
           studioMode: "recruitment",
           companyName: cleanCompany,
           flyerDuration,
@@ -1176,6 +1220,7 @@ export function App() {
         subtitleStyle,
         renderMode,
         visualStyle,
+        animationStyle: (data as VideoSpec).animationStyle || animationStyle,
         sfxEnabled,
         studioMode: "recruitment",
         showBrandHeader: true,
@@ -1186,7 +1231,7 @@ export function App() {
       };
       setSpec(currentSpec);
 
-      if (autoImages && renderMode !== "editorial") {
+      if (autoImages && renderMode !== "editorial" && renderMode !== "animated") {
         setLoadingStep("Generando visuales corporativos 9:16...");
         currentSpec = await generateAllImages(currentSpec, visualStyle, false);
       }
@@ -1301,6 +1346,7 @@ export function App() {
         voiceSpeed,
         subtitleStyle,
         renderMode,
+        animationStyle,
         sfxEnabled,
         globalAudioKey,
         companyLogoUrl: exportLogoUrl,
@@ -1691,6 +1737,21 @@ export function App() {
                 </select>
 
                 <select
+                  value={animationStyle}
+                  onChange={(e) =>
+                    handleAnimationStyleChange(e.target.value as AnimationStyle)
+                  }
+                  className="full-span"
+                  aria-label="Estilo de Animación"
+                >
+                  {ANIMATION_STYLE_OPTIONS.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.label}
+                    </option>
+                  ))}
+                </select>
+
+                <select
                   value={topicMode}
                   onChange={(e) => setTopicMode(e.target.value as TopicMode)}
                   className="full-span"
@@ -1917,6 +1978,20 @@ export function App() {
                 {RENDER_MODE_OPTIONS.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.label}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={animationStyle}
+                onChange={(e) =>
+                  handleAnimationStyleChange(e.target.value as AnimationStyle)
+                }
+                aria-label="Estilo de Animación"
+              >
+                {ANIMATION_STYLE_OPTIONS.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.label}
                   </option>
                 ))}
               </select>
@@ -2204,11 +2279,14 @@ export function App() {
                             sceneMode:
                               val === "flyer-end"
                                 ? "editorial"
+                                : val === "animated-stage"
+                                ? "animated"
                                 : scene.sceneMode || renderMode,
                           });
                         }
                       }}
                     >
+                      <option value="animated-stage">Escena Animada a medida</option>
                       <option value="hero-impact">Impacto / Portada</option>
                       <option value="story-clean">Narrativa limpia</option>
                       <option value="split-versus">Duelo / Comparativa</option>
@@ -2365,6 +2443,7 @@ export function App() {
                         }
                         title="Estilo visual de esta escena"
                       >
+                        <option value="animated">Animación SVG</option>
                         <option value="hybrid">Híbrida</option>
                         <option value="editorial">Editorial (Íconos)</option>
                         <option value="cinematic">Cinematográfica</option>

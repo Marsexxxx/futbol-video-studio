@@ -14,7 +14,8 @@ export type SceneLayout =
   | "stat-overlay"
   | "quote-press"
   | "cta-engage"
-  | "flyer-end";
+  | "flyer-end"
+  | "animated-stage";
 
 export type CameraMotion =
   | "impact-punch"
@@ -23,7 +24,18 @@ export type CameraMotion =
   | "pan-left"
   | "pan-right";
 
-export type RenderMode = "hybrid" | "editorial" | "cinematic";
+export type RenderMode = "animated" | "hybrid" | "editorial" | "cinematic";
+export type AnimationStyle =
+  | "pixel-art"
+  | "chalkboard"
+  | "neon-sketch"
+  | "ps2-retro"
+  | "comic"
+  | "flat-vector"
+  | "minimal-line"
+  | "cgi"
+  | "lego"
+  | "3d-explainer";
 export type TransitionType = "slide-left" | "slide-up" | "wipe" | "fade" | "flip";
 export type StudioMode = "general" | "recruitment";
 
@@ -77,6 +89,8 @@ export interface VideoScene {
   videoName?: string;
   videoMuted?: boolean;
   svgMarkup?: string;
+  svgScene?: string;
+  speechBubble?: string;
   audioUrl?: string;
   rawAudioDuration?: number;
   audioAssetKey?: string;
@@ -99,6 +113,7 @@ export interface VideoSpec {
   subtitleStyle?: SubtitleStyle;
   renderMode?: RenderMode;
   visualStyle?: VisualStyle;
+  animationStyle?: AnimationStyle;
   sfxEnabled?: boolean;
   targetDuration?: number;
   globalAudioKey?: string;

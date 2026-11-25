@@ -8,6 +8,7 @@
 ## Arquitectura Actual
 - **Frontend:** React + TypeScript + Vite (`src/App.tsx`, `src/types.ts`, `src/index.css`).
 - **Motor de video:** Remotion 9:16 (`1080×1920`, 30 fps) en `src/remotion/DynamicVideo.tsx` y `src/remotion/Root.tsx`, usando `@remotion/transitions`, `@remotion/shapes` y `@remotion/noise`.
+  - **Motor SVG Animado (`AnimatedSvgStage` + `StyleBackdrop`):** Renderiza escenas SVG deterministas cuadro a cuadro (`useCurrentFrame()` + variables CSS acotadas, sin `@keyframes`), soporta `renderMode: "animated"` y `layout: "animated-stage"`, sanitización SVG, globo `speechBubble` y 10 `animationStyle`: `pixel-art`, `chalkboard`, `neon-sketch`, `ps2-retro`, `comic`, `flat-vector`, `minimal-line`, `cgi`, `lego` y `3d-explainer`.
 - **Backend (Netlify Edge Functions):**
   - `netlify/edge-functions/generate-video.js` (guion y estructura de escenas con Gemini)
   - `netlify/edge-functions/generate-image.js` (imágenes 9:16 con Gemini/Imagen)
@@ -17,7 +18,7 @@
 - **SFX locales:** `public/sfx/whoosh.wav` y `public/sfx/pop.wav`.
 
 ## Dos Pestañas Principales (NO mezclar ni romper)
-1. **Contenido General:** Videos verticales sobre cualquier tema (deportes, historia, ciencia, etc.). Soporta modos `hybrid`, `editorial` y `cinematic`, subtítulos dinámicos palabra por palabra y clásicos, subida de imágenes y videos por escena, y control exacto de duración.
+1. **Contenido General:** Videos verticales sobre cualquier tema (deportes, historia, ciencia, etc.). Soporta modos `animated`, `hybrid`, `editorial` y `cinematic`, subtítulos dinámicos palabra por palabra y clásicos, subida de imágenes y videos por escena, y control exacto de duración.
 2. **Reclutamiento / Vacantes:**
    - **Empresa predeterminada:** `UNIÓN DE PRODUCTORES DE CAÑA DE JOACHÍN`
    - **Paleta oficial (ASR Group):**
