@@ -33,7 +33,10 @@ export type VisualStyle =
   | "hyperart"
   | "editorial3d"
   | "anime"
-  | "editorial";
+  | "editorial"
+  | "pixelart"
+  | "lego"
+  | "roblox";
 export type TopicMode =
   | "auto"
   | "sports"
@@ -95,6 +98,7 @@ export interface VideoSpec {
   voiceSpeed?: number;
   subtitleStyle?: SubtitleStyle;
   renderMode?: RenderMode;
+  visualStyle?: VisualStyle;
   sfxEnabled?: boolean;
   targetDuration?: number;
   globalAudioKey?: string;

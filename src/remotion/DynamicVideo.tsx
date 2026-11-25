@@ -69,6 +69,7 @@ import {
   VideoScene,
   VideoSpec,
   VideoTheme,
+  VisualStyle,
 } from "../types";
 
 const h = React.createElement;
@@ -164,9 +165,16 @@ type SceneCommonProps = {
   subtitleStyle: SubtitleStyle;
   sceneIndex: number;
   renderMode: RenderMode;
+  visualStyle?: VisualStyle;
   sfxEnabled: boolean;
   showBrandHeader: boolean;
 };
+
+function getStylizedFrame(frame: number, visualStyle?: VisualStyle): number {
+  if (visualStyle === "lego") return Math.floor(frame / 3) * 3;
+  if (visualStyle === "pixelart") return Math.floor(frame / 2) * 2;
+  return frame;
+}
 
 const resolveMediaSrc = (src?: string | null): string | undefined => {
   if (!src) return undefined;
@@ -536,10 +544,12 @@ const EditorialBackdrop: React.FC<{
   theme: VideoTheme;
   sceneIndex: number;
   showBrandHeader: boolean;
-}> = ({ theme, sceneIndex, showBrandHeader }) => {
-  const frame = useCurrentFrame();
+  visualStyle?: VisualStyle;
+}> = ({ theme, sceneIndex, showBrandHeader, visualStyle }) => {
+  const rawFrame = useCurrentFrame();
+  const frame = getStylizedFrame(rawFrame, visualStyle);
   const { durationInFrames } = useVideoConfig();
-  const progress = interpolate(frame, [0, Math.max(1, durationInFrames)], [0, 1], {
+  const progress = interpolate(rawFrame, [0, Math.max(1, durationInFrames)], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -677,6 +687,7 @@ const AnimatedBackdrop: React.FC<{
   motion: CameraMotion;
   sceneIndex: number;
   showBrandHeader: boolean;
+  visualStyle?: VisualStyle;
 }> = ({
   imgSrc,
   videoSrc,
@@ -685,9 +696,15 @@ const AnimatedBackdrop: React.FC<{
   motion,
   sceneIndex,
   showBrandHeader,
+  visualStyle,
 }) => {
-  const frame = useCurrentFrame();
+  const rawFrame = useCurrentFrame();
+  const frame = getStylizedFrame(rawFrame, visualStyle);
   const { durationInFrames } = useVideoConfig();
+  const rawProgress = interpolate(rawFrame, [0, Math.max(1, durationInFrames)], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
   const progress = interpolate(frame, [0, Math.max(1, durationInFrames)], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -753,6 +770,7 @@ const AnimatedBackdrop: React.FC<{
           height: "100%",
           objectFit: "cover",
           transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`,
+          ...(visualStyle === "pixelart" ? { imageRendering: "pixelated" as const } : {}),
         },
       })
     : h(AbsoluteFill, {
@@ -777,6 +795,25 @@ const AnimatedBackdrop: React.FC<{
           "linear-gradient(180deg, rgba(14,18,16,0.78) 0%, rgba(14,18,16,0.16) 28%, rgba(14,18,16,0.06) 54%, rgba(14,18,16,0.86) 100%)",
       },
     }),
+    visualStyle === "pixelart"
+      ? h(AbsoluteFill, {
+          style: {
+            backgroundImage:
+              "repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.5) 0px, rgba(0, 0, 0, 0.5) 2px, transparent 2px, transparent 6px)",
+            opacity: 0.07,
+            pointerEvents: "none",
+          },
+        })
+      : null,
+    visualStyle === "roblox"
+      ? h(AbsoluteFill, {
+          style: {
+            background:
+              "linear-gradient(128deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.03) 26%, transparent 48%, rgba(255,255,255,0.06) 76%, transparent 100%)",
+            pointerEvents: "none",
+          },
+        })
+      : null,
     h("div", {
       style: {
         position: "absolute",
@@ -806,7 +843,7 @@ const AnimatedBackdrop: React.FC<{
       },
       h("div", {
         style: {
-          width: `${progress * 100}%`,
+          width: `${rawProgress * 100}%`,
           height: "100%",
           backgroundColor: theme.accentColor,
         },
@@ -831,15 +868,28 @@ const EditorialCenterStage: React.FC<{
   videoSrc?: string;
   videoMuted?: boolean;
   showBrandHeader: boolean;
-}> = ({ scene, theme, imgSrc, videoSrc, videoMuted = true, showBrandHeader }) => {
-  const frame = useCurrentFrame();
+  visualStyle?: VisualStyle;
+}> = ({
+  scene,
+  theme,
+  imgSrc,
+  videoSrc,
+  videoMuted = true,
+  showBrandHeader,
+  visualStyle,
+}) => {
+  const rawFrame = useCurrentFrame();
+  const frame = getStylizedFrame(rawFrame, visualStyle);
   const { fps } = useVideoConfig();
   const IconComp = getIconComponent(scene.iconName);
+  const isRoblox = visualStyle === "roblox";
 
   const enter = spring({
     frame: Math.max(0, frame - 6),
     fps,
-    config: { damping: 12, stiffness: 150 },
+    config: isRoblox
+      ? { damping: 8, stiffness: 215, mass: 0.85 }
+      : { damping: 12, stiffness: 150 },
   });
   const floatY = Math.sin(frame * 0.065) * 10;
   const ringPulse = 1 + Math.sin(frame * 0.09) * 0.06;
@@ -872,7 +922,9 @@ const EditorialCenterStage: React.FC<{
             borderRadius: 36,
             overflow: "hidden",
             border: `7px solid ${theme.accentColor}`,
-            boxShadow: "0 30px 70px rgba(0,0,0,0.65)",
+            boxShadow: isRoblox
+              ? "0 30px 70px rgba(0,0,0,0.65), inset 0 3px 0 rgba(255,255,255,0.45)"
+              : "0 30px 70px rgba(0,0,0,0.65)",
             backgroundColor: "#060C18",
           },
         },
@@ -885,8 +937,24 @@ const EditorialCenterStage: React.FC<{
             })
           : h(Img, {
               src: imgSrc || "",
-              style: { width: "100%", height: "100%", objectFit: "cover" },
+              style: {
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                ...(visualStyle === "pixelart" ? { imageRendering: "pixelated" as const } : {}),
+              },
             }),
+        isRoblox
+          ? h("div", {
+              style: {
+                position: "absolute",
+                inset: 0,
+                background:
+                  "linear-gradient(138deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.03) 34%, transparent 55%)",
+                pointerEvents: "none",
+              },
+            })
+          : null,
         h(
           "div",
           {
@@ -902,7 +970,9 @@ const EditorialCenterStage: React.FC<{
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 12px 28px rgba(0,0,0,0.45)",
+              boxShadow: isRoblox
+                ? "0 12px 28px rgba(0,0,0,0.45), inset 0 2px 0 rgba(255,255,255,0.5)"
+                : "0 12px 28px rgba(0,0,0,0.45)",
             },
           },
           h(IconComp, { size: 46, strokeWidth: 2.6 })
@@ -950,6 +1020,8 @@ const EditorialCenterStage: React.FC<{
       "div",
       {
         style: {
+          position: "relative",
+          overflow: "hidden",
           width: 300,
           height: 300,
           borderRadius: 72,
@@ -958,11 +1030,24 @@ const EditorialCenterStage: React.FC<{
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          boxShadow: "0 28px 70px rgba(0,0,0,0.58)",
+          boxShadow: isRoblox
+            ? "0 28px 70px rgba(0,0,0,0.58), inset 0 4px 0 rgba(255,255,255,0.48)"
+            : "0 28px 70px rgba(0,0,0,0.58)",
           opacity: enter,
           transform: `translateY(${floatY}px) scale(${interpolate(enter, [0, 1], [0.55, 1])}) rotate(${interpolate(enter, [0, 1], [-14, 0])}deg)`,
         },
       },
+      isRoblox
+        ? h("div", {
+            style: {
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(140deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.04) 42%, transparent 56%)",
+              pointerEvents: "none",
+            },
+          })
+        : null,
       h(IconComp, { size: 150, color: "#FFFFFF", strokeWidth: 2.1 })
     )
   );
@@ -972,9 +1057,11 @@ const MidSceneCallout: React.FC<{
   scene: VideoScene;
   theme: VideoTheme;
   isEditorial: boolean;
-}> = ({ scene, theme, isEditorial }) => {
+  visualStyle?: VisualStyle;
+}> = ({ scene, theme, isEditorial, visualStyle }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
+  const isRoblox = visualStyle === "roblox";
 
   if (!scene.calloutText?.trim()) return null;
 
@@ -982,7 +1069,9 @@ const MidSceneCallout: React.FC<{
   const pop = spring({
     frame: Math.max(0, frame - triggerFrame),
     fps,
-    config: { damping: 12, stiffness: 230 },
+    config: isRoblox
+      ? { damping: 8, stiffness: 250, mass: 0.85 }
+      : { damping: 12, stiffness: 230 },
   });
 
   if (frame < triggerFrame) return null;
@@ -1013,7 +1102,9 @@ const MidSceneCallout: React.FC<{
           borderRadius: 999,
           backgroundColor: "rgba(24, 28, 26, 0.92)",
           border: `4px solid ${theme.accentColor}`,
-          boxShadow: "0 18px 42px rgba(0,0,0,0.6)",
+          boxShadow: isRoblox
+            ? "0 18px 42px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.34)"
+            : "0 18px 42px rgba(0,0,0,0.6)",
           opacity: pop,
           transform: `translateY(${interpolate(pop, [0, 1], [34, 0])}px) scale(${interpolate(pop, [0, 1], [0.75, 1])})`,
         },
@@ -1223,6 +1314,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
   subtitleStyle,
   sceneIndex,
   renderMode,
+  visualStyle,
   sfxEnabled,
   showBrandHeader,
 }) => {
@@ -1231,6 +1323,9 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
   const layout = inferLayout(scene);
   const motion = inferMotion(scene, sceneIndex);
   const isFlyerEnd = layout === "flyer-end";
+  const activeVisualStyle = isFlyerEnd ? undefined : visualStyle;
+  const animFrame = getStylizedFrame(frame, activeVisualStyle);
+  const isRoblox = activeVisualStyle === "roblox";
   const activeMode = isFlyerEnd ? "editorial" : resolveSceneMode(scene, renderMode);
   const isEditorial = activeMode === "editorial";
   const isHybrid = activeMode === "hybrid";
@@ -1243,12 +1338,16 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
   const titleSpring = spring({
     frame: Math.max(0, frame - 2),
     fps,
-    config: { damping: 14, stiffness: 170 },
+    config: isRoblox
+      ? { damping: 9, stiffness: 220, mass: 0.85 }
+      : { damping: 14, stiffness: 170 },
   });
   const detailSpring = spring({
     frame: Math.max(0, frame - 14),
     fps,
-    config: { damping: 13, stiffness: 180 },
+    config: isRoblox
+      ? { damping: 8, stiffness: 230, mass: 0.85 }
+      : { damping: 13, stiffness: 180 },
   });
 
   const leftTarget = Math.min(100, Math.max(1, scene.leftValue ?? 50));
@@ -1284,7 +1383,12 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
       },
     },
     isEditorial
-      ? h(EditorialBackdrop, { theme, sceneIndex, showBrandHeader })
+      ? h(EditorialBackdrop, {
+          theme,
+          sceneIndex,
+          showBrandHeader,
+          visualStyle: activeVisualStyle,
+        })
       : h(AnimatedBackdrop, {
           imgSrc,
           videoSrc,
@@ -1293,6 +1397,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
           motion,
           sceneIndex,
           showBrandHeader,
+          visualStyle: activeVisualStyle,
         }),
     sfxEnabled && (showMidCallout || layout === "stat-overlay" || isFlyerEnd)
       ? h(
@@ -1316,6 +1421,7 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
           videoSrc,
           videoMuted: scene.videoMuted !== false,
           showBrandHeader,
+          visualStyle: activeVisualStyle,
         })
       : null,
     !isFlyerEnd && isHybrid && !isEditorial && scene.iconName
@@ -1329,14 +1435,18 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
               width: 90,
               height: 90,
               borderRadius: 26,
-              backgroundColor: "rgba(24, 28, 26, 0.84)",
+              background: isRoblox
+                ? "linear-gradient(145deg, rgba(48, 54, 62, 0.92), rgba(20, 24, 26, 0.88))"
+                : "rgba(24, 28, 26, 0.84)",
               border: `4px solid ${theme.accentColor}`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 14px 32px rgba(0,0,0,0.5)",
+              boxShadow: isRoblox
+                ? "0 14px 32px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.45)"
+                : "0 14px 32px rgba(0,0,0,0.5)",
               opacity: detailSpring,
-              transform: `scale(${interpolate(detailSpring, [0, 1], [0.5, 1])}) rotate(${Math.sin(frame * 0.08) * 4}deg)`,
+              transform: `scale(${interpolate(detailSpring, [0, 1], [0.5, 1])}) rotate(${Math.sin(animFrame * 0.08) * 4}deg)`,
             },
           },
           h(IconComp, { size: 46, color: theme.accentColor, strokeWidth: 2.4 })
@@ -1847,6 +1957,9 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
                     display: "flex",
                     alignItems: "center",
                     gap: 18,
+                    boxShadow: isRoblox
+                      ? "0 12px 28px rgba(0,0,0,0.45), inset 0 2px 0 rgba(255,255,255,0.28)"
+                      : undefined,
                   },
                 },
                 h(
@@ -1880,7 +1993,9 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
                   textAlign: "center",
                   fontSize: 40,
                   fontWeight: 900,
-                  boxShadow: "0 16px 36px rgba(0,0,0,0.55)",
+                  boxShadow: isRoblox
+                    ? "0 16px 36px rgba(0,0,0,0.55), inset 0 3px 0 rgba(255,255,255,0.45)"
+                    : "0 16px 36px rgba(0,0,0,0.55)",
                 },
               },
               scene.ctaText || "¿TÚ QUÉ OPINAS? COMENTA ↓"
@@ -1888,7 +2003,14 @@ const SceneDynamic: React.FC<SceneCommonProps> = ({
           )
         )
       : null,
-    showMidCallout ? h(MidSceneCallout, { scene, theme, isEditorial }) : null,
+    showMidCallout
+      ? h(MidSceneCallout, {
+          scene,
+          theme,
+          isEditorial,
+          visualStyle: activeVisualStyle,
+        })
+      : null,
     h(SceneSubtitle, {
       scene,
       accent: theme.accentColor,
@@ -2082,6 +2204,7 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
   const voiceSpeed = spec.voiceSpeed || 1;
   const subtitleStyle: SubtitleStyle = spec.subtitleStyle || "dynamic";
   const renderMode: RenderMode = spec.renderMode || "hybrid";
+  const visualStyle: VisualStyle | undefined = spec.visualStyle;
   const sfxEnabled = spec.sfxEnabled !== false;
   const showBrandHeader = Boolean(spec.showBrandHeader);
   const resolvedGlobalAudio = resolveMediaSrc(audioUrl);
@@ -2122,6 +2245,7 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
             subtitleStyle,
             sceneIndex: index,
             renderMode,
+            visualStyle,
             sfxEnabled,
             showBrandHeader,
           })
@@ -2132,6 +2256,7 @@ export const DynamicVideo: React.FC<DynamicVideoProps> = ({ spec, audioUrl }) =>
             subtitleStyle,
             sceneIndex: index,
             renderMode,
+            visualStyle,
             sfxEnabled,
             showBrandHeader,
           });

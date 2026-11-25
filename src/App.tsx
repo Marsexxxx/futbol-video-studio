@@ -103,6 +103,9 @@ const VISUAL_STYLE_OPTIONS: { id: VisualStyle; label: string }[] = [
   { id: "hyperart", label: "Visual: Arte conceptual hiperrealista" },
   { id: "editorial3d", label: "Visual: 3D Cinematográfico" },
   { id: "anime", label: "Visual: Anime cinematográfico" },
+  { id: "pixelart", label: "Visual: Pixel Art HD Detallado (Animación Retro)" },
+  { id: "lego", label: "Visual: Bloques de Juguete tipo LEGO (Stop-Motion)" },
+  { id: "roblox", label: "Visual: Bloques 3D tipo Roblox (Mundo Sandbox)" },
 ];
 
 const SPEED_OPTIONS = [
@@ -580,6 +583,7 @@ export function App() {
     voiceSpeed: 1.0,
     subtitleStyle: "dynamic",
     renderMode: "hybrid",
+    visualStyle: "editorial",
     sfxEnabled: true,
     targetDuration: 35,
     studioMode: "general",
@@ -731,6 +735,14 @@ export function App() {
     }));
   };
 
+  const handleVisualStyleChange = (nextStyle: VisualStyle) => {
+    setVisualStyle(nextStyle);
+    setSpec((prev) => ({
+      ...prev,
+      visualStyle: nextStyle,
+    }));
+  };
+
   const handleFlyerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -877,7 +889,11 @@ export function App() {
     setImagesLoading(true);
     setImageError(null);
     const updatedScenes = [...targetSpec.scenes];
-    let latestSpec: VideoSpec = { ...targetSpec, scenes: updatedScenes };
+    let latestSpec: VideoSpec = {
+      ...targetSpec,
+      visualStyle: selectedVisualStyle,
+      scenes: updatedScenes,
+    };
 
     try {
       let lastProvider = "gemini-image";
@@ -1048,6 +1064,7 @@ export function App() {
         voiceSpeed,
         subtitleStyle,
         renderMode,
+        visualStyle,
         sfxEnabled,
         studioMode: "general",
         showBrandHeader: false,
@@ -1158,6 +1175,7 @@ export function App() {
         voiceSpeed,
         subtitleStyle,
         renderMode,
+        visualStyle,
         sfxEnabled,
         studioMode: "recruitment",
         showBrandHeader: true,
@@ -1982,7 +2000,9 @@ export function App() {
             <div className="voice-grid">
               <select
                 value={visualStyle}
-                onChange={(e) => setVisualStyle(e.target.value as VisualStyle)}
+                onChange={(e) =>
+                  handleVisualStyleChange(e.target.value as VisualStyle)
+                }
                 className="full-span"
               >
                 {VISUAL_STYLE_OPTIONS.map((v) => (

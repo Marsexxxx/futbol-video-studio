@@ -254,6 +254,31 @@ const VISUAL_STYLES = {
     "High-end stylized 3D cinematic render, Unreal Engine 5 lighting, expressive lifelike details, dramatic shadows, premium animated film aesthetic, edge-to-edge full-bleed vertical 9:16 frame, strictly NO text, NO letters, NO watermarks, NO borders, NO frames.",
   anime:
     "High-budget modern cinematic anime illustration, dramatic lighting, crisp linework, atmospheric depth, vibrant film color grading, edge-to-edge full-bleed vertical 9:16 frame, strictly NO text, NO letters, NO watermarks, NO borders, NO frames.",
+  pixelart:
+    "Masterpiece ultra-detailed modern 32-bit HD pixel art illustration, crisp visible pixel clusters, rich dithering, dynamic atmospheric lighting, intricate tiny environmental details, expressive retro-modern RPG/indie game cutscene aesthetic, vibrant cinema color palette, full-bleed vertical 9:16 frame, strictly NO text, NO letters, NO UI bars, NO watermarks, NO borders, NO frames.",
+  lego:
+    "Ultra-detailed miniature toy-brick stop-motion movie still, built entirely from glossy interlocking ABS plastic building bricks, visible cylindrical studs, articulated plastic brick minifigures with expressive painted faces, macro tilt-shift photography with shallow depth of field, subtle micro-scratches and realistic plastic reflections, warm cinematic studio lighting, full-bleed vertical 9:16 frame, strictly NO text, NO logos, NO letters, NO watermarks, NO borders, NO frames.",
+  roblox:
+    "High-detail stylized 3D blocky toy-avatar sandbox game render, characters with smooth beveled cubic bodies, blocky articulated limbs and expressive stylized faces, rich glossy plastic and matte toy materials, vibrant game-engine global illumination, dramatic volumetric rim lighting, intricate blocky 3D environment props, full-bleed vertical 9:16 frame, strictly NO text, NO usernames, NO UI HUD, NO letters, NO watermarks, NO borders, NO frames.",
+};
+
+const SAFE_RETRY_STYLES = {
+  photoreal:
+    "Cinematic documentary photography, natural dramatic lighting, rich detail, full-bleed vertical 9:16 frame, strictly NO text, NO watermarks, NO borders, NO frames.",
+  editorial:
+    "Modern editorial documentary illustration, clean bold shapes, dramatic lighting, rich detail, full-bleed vertical 9:16 frame, strictly NO text, NO watermarks, NO borders, NO frames.",
+  hyperart:
+    "Dramatic digital concept artwork, cinematic lighting, rich contrast and atmosphere, full-bleed vertical 9:16 frame, strictly NO text, NO watermarks, NO borders, NO frames.",
+  editorial3d:
+    "Stylized 3D animated film render, dramatic studio lighting, rich surface detail, full-bleed vertical 9:16 frame, strictly NO text, NO watermarks, NO borders, NO frames.",
+  anime:
+    "Modern cinematic anime illustration, dramatic lighting, expressive linework, vibrant atmosphere, full-bleed vertical 9:16 frame, strictly NO text, NO watermarks, NO borders, NO frames.",
+  pixelart:
+    "Modern 32-bit HD pixel art illustration, crisp visible pixel clusters, rich dithering, atmospheric lighting, full-bleed vertical 9:16 frame, strictly NO text, NO UI bars, NO watermarks, NO borders, NO frames.",
+  lego:
+    "Miniature glossy ABS plastic toy-brick stop-motion diorama with interlocking studded blocks and articulated block figures, macro studio lighting, full-bleed vertical 9:16 frame, strictly NO text, NO logos, NO watermarks, NO borders, NO frames.",
+  roblox:
+    "Stylized 3D blocky toy-avatar sandbox game render with smooth beveled cubic figures, glossy plastic materials and dramatic rim lighting, full-bleed vertical 9:16 frame, strictly NO text, NO UI HUD, NO watermarks, NO borders, NO frames.",
 };
 
 export default async (req) => {
@@ -288,8 +313,9 @@ export default async (req) => {
     }
 
     const styleSuffix = VISUAL_STYLES[visualStyle] || VISUAL_STYLES.photoreal;
+    const safeStyleSuffix = SAFE_RETRY_STYLES[visualStyle] || styleSuffix;
     const primaryPrompt = `${basePrompt}. ${styleSuffix}`;
-    const safeRetryPrompt = `${String(fallbackPrompt || basePrompt).trim()}. Modern editorial documentary artwork, dramatic lighting, rich detail, full-bleed vertical 9:16 frame, strictly NO text, NO borders, NO frames.`;
+    const safeRetryPrompt = `${String(fallbackPrompt || basePrompt).trim()}. ${safeStyleSuffix}`;
 
     const candidates = await discoverImageModels(apiKey);
     const startTime = Date.now();
