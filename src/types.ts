@@ -73,6 +73,7 @@ export interface VideoScene {
   subtitle: string;
   imagePrompt?: string;
   fallbackImagePrompt?: string;
+  animationPrompt?: string;
   quoteText?: string;
   ctaText?: string;
   highlightValue?: string;

@@ -38,6 +38,7 @@ import {
   TransitionType,
   VideoScene,
   VideoSpec,
+  VideoTheme,
   VisualStyle,
 } from "./types";
 
@@ -200,6 +201,12 @@ type TtsResponse = {
 type ImageGenResponse = {
   imageBase64?: string;
   mimeType?: string;
+  provider?: string;
+  error?: string;
+};
+
+type SvgGenResponse = {
+  svgScene?: string;
   provider?: string;
   error?: string;
 };
@@ -595,6 +602,41 @@ async function fetchSceneImage(
   };
 }
 
+async function fetchSceneSvg(
+  scene: VideoScene,
+  animationStyle: AnimationStyle,
+  theme: VideoTheme,
+  showBrandHeader: boolean
+): Promise<{ svgScene: string; provider: string }> {
+  const res = await fetch("/api/generate-scene-svg", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      scene,
+      animationStyle,
+      theme,
+      showBrandHeader,
+    }),
+  });
+
+  const raw = await res.text();
+  let data: SvgGenResponse = {};
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new Error(`Error SVG (${res.status}): ${raw.slice(0, 120)}`);
+  }
+
+  if (!res.ok || !data.svgScene) {
+    throw new Error(data.error || "No se pudo generar el SVG de la escena.");
+  }
+
+  return {
+    svgScene: data.svgScene,
+    provider: data.provider || "gemini-svg",
+  };
+}
+
 export function App() {
   const [activeTab, setActiveTab] = useState<StudioMode>("general");
   const [spec, setSpec] = useState<VideoSpec>({
@@ -654,10 +696,14 @@ export function App() {
   const [voiceProgress, setVoiceProgress] = useState("");
   const [imagesLoading, setImagesLoading] = useState(false);
   const [imagesProgress, setImagesProgress] = useState("");
+  const [svgsLoading, setSvgsLoading] = useState(false);
+  const [svgsProgress, setSvgsProgress] = useState("");
   const [sceneVoiceLoading, setSceneVoiceLoading] = useState<number | null>(null);
   const [sceneImageLoading, setSceneImageLoading] = useState<number | null>(null);
+  const [sceneSvgLoading, setSceneSvgLoading] = useState<number | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [svgError, setSvgError] = useState<string | null>(null);
 
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioName, setAudioName] = useState<string | null>(null);
@@ -1051,6 +1097,120 @@ export function App() {
     }
   };
 
+  const generateAllSvgs = async (
+    targetSpec: VideoSpec,
+    selectedAnimationStyle = animationStyle
+  ): Promise<VideoSpec> => {
+    const updatedScenes = [...targetSpec.scenes];
+    let latestSpec: VideoSpec = {
+      ...targetSpec,
+      animationStyle: selectedAnimationStyle,
+      scenes: updatedScenes,
+    };
+
+    const targetIndices = updatedScenes
+      .map((scene, idx) =>
+        scene.layout === "animated-stage" && !scene.videoUrl && !scene.imageUrl
+          ? idx
+          : -1
+      )
+      .filter((idx) => idx !== -1);
+
+    if (targetIndices.length === 0) return latestSpec;
+
+    setSvgsLoading(true);
+    setSvgError(null);
+    let completedCount = 0;
+    setSvgsProgress(`Animando escena 1/${targetIndices.length}...`);
+
+    try {
+      for (let offset = 0; offset < targetIndices.length; offset += 2) {
+        const batch = targetIndices.slice(offset, offset + 2);
+        const results = await Promise.allSettled(
+          batch.map(async (sceneIdx) => {
+            const result = await fetchSceneSvg(
+              updatedScenes[sceneIdx],
+              selectedAnimationStyle,
+              latestSpec.theme,
+              Boolean(latestSpec.showBrandHeader)
+            );
+            updatedScenes[sceneIdx] = {
+              ...updatedScenes[sceneIdx],
+              svgScene: result.svgScene,
+            };
+            completedCount += 1;
+            const nextIndex = Math.min(completedCount + 1, targetIndices.length);
+            setSvgsProgress(
+              `Animando escena ${nextIndex}/${targetIndices.length}...`
+            );
+            latestSpec = {
+              ...latestSpec,
+              animationStyle: selectedAnimationStyle,
+              scenes: [...updatedScenes],
+            };
+            setSpec(latestSpec);
+            return result;
+          })
+        );
+
+        const failed = results.find((r) => r.status === "rejected");
+        if (failed && failed.status === "rejected") {
+          const msg =
+            failed.reason instanceof Error
+              ? failed.reason.message
+              : "No se pudieron generar todas las animaciones SVG.";
+          setSvgError((prev) => prev || msg);
+        }
+      }
+    } catch (err) {
+      setSvgError(
+        err instanceof Error
+          ? err.message
+          : "No se pudieron generar todas las animaciones SVG."
+      );
+    } finally {
+      setSvgsLoading(false);
+      setSvgsProgress("");
+    }
+
+    return latestSpec;
+  };
+
+  const regenerateSingleSceneSvg = async (index: number) => {
+    const scene = spec.scenes[index];
+    if (!scene || scene.layout === "flyer-end") return;
+
+    setSceneSvgLoading(index);
+    setSvgError(null);
+
+    try {
+      const styleToUse = spec.animationStyle || animationStyle;
+      const result = await fetchSceneSvg(
+        scene,
+        styleToUse,
+        spec.theme,
+        Boolean(spec.showBrandHeader)
+      );
+      updateScene(index, {
+        type: scene.type === "tactics" ? "cinematic" : scene.type,
+        layout: "animated-stage",
+        sceneMode:
+          scene.sceneMode === "hybrid" || scene.sceneMode === "cinematic"
+            ? scene.sceneMode
+            : "animated",
+        svgScene: result.svgScene,
+      });
+    } catch (err) {
+      setSvgError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo regenerar la animación SVG."
+      );
+    } finally {
+      setSceneSvgLoading(null);
+    }
+  };
+
   const handleGenerateGeneral = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim()) return;
@@ -1064,6 +1224,7 @@ export function App() {
     setError(null);
     setVoiceError(null);
     setImageError(null);
+    setSvgError(null);
 
     try {
       const res = await fetch("/api/generate-video", {
@@ -1114,6 +1275,17 @@ export function App() {
         targetDuration: data.targetDuration || requestedSeconds,
       };
       setSpec(currentSpec);
+
+      const hasAnimatedStage = currentSpec.scenes.some(
+        (s) => s.layout === "animated-stage" && !s.videoUrl && !s.imageUrl
+      );
+      if (hasAnimatedStage) {
+        setLoadingStep("Generando animaciones SVG...");
+        currentSpec = await generateAllSvgs(
+          currentSpec,
+          currentSpec.animationStyle || animationStyle
+        );
+      }
 
       if (autoImages && renderMode !== "editorial" && renderMode !== "animated") {
         setLoadingStep("Generando visuales 9:16...");
@@ -1167,6 +1339,7 @@ export function App() {
     setError(null);
     setVoiceError(null);
     setImageError(null);
+    setSvgError(null);
 
     try {
       const res = await fetch("/api/generate-video", {
@@ -1230,6 +1403,17 @@ export function App() {
         targetDuration: data.targetDuration || requestedSeconds,
       };
       setSpec(currentSpec);
+
+      const hasAnimatedStage = currentSpec.scenes.some(
+        (s) => s.layout === "animated-stage" && !s.videoUrl && !s.imageUrl
+      );
+      if (hasAnimatedStage) {
+        setLoadingStep("Generando animaciones corporativas SVG...");
+        currentSpec = await generateAllSvgs(
+          currentSpec,
+          currentSpec.animationStyle || animationStyle
+        );
+      }
 
       if (autoImages && renderMode !== "editorial" && renderMode !== "animated") {
         setLoadingStep("Generando visuales corporativos 9:16...");
@@ -1495,7 +1679,7 @@ export function App() {
       id: `s-${Date.now()}`,
       type: "cinematic",
       sceneMode: renderMode,
-      layout: "story-clean",
+      layout: renderMode === "animated" ? "animated-stage" : "story-clean",
       cameraMotion: "zoom-in",
       transition: "slide-left",
       iconName: activeTab === "recruitment" ? "briefcase" : "sparkles",
@@ -1506,6 +1690,8 @@ export function App() {
       subtitle: "Texto narrado para esta escena.",
       imagePrompt:
         "Dramatic vertical 9:16 cinematic scene with atmospheric lighting, realistic photography",
+      animationPrompt:
+        "Personaje principal expresivo en acción acorde al texto, acompañado de elementos y utilería flotante en el escenario.",
     };
     setSpec((prev) => ({ ...prev, scenes: [...prev.scenes, newScene] }));
   };
@@ -1567,7 +1753,7 @@ export function App() {
     exportState.status === "queued" ||
     exportState.status === "in_progress";
 
-  const isBusy = loading || voiceLoading || imagesLoading;
+  const isBusy = loading || voiceLoading || imagesLoading || svgsLoading;
 
   return (
     <div className="studio-shell" data-theme={activeTab}>
@@ -1799,7 +1985,11 @@ export function App() {
                     ? h(Loader2, { size: 16, className: "spin" })
                     : h(Sparkles, { size: 16 })}
                   {loading
-                    ? imagesProgress || voiceProgress || loadingStep || "Generando..."
+                    ? imagesProgress ||
+                      svgsProgress ||
+                      voiceProgress ||
+                      loadingStep ||
+                      "Generando..."
                     : "Crear video"}
                 </button>
               </div>
@@ -2038,6 +2228,7 @@ export function App() {
                     : h(Briefcase, { size: 16 })}
                   {loading
                     ? imagesProgress ||
+                      svgsProgress ||
                       voiceProgress ||
                       loadingStep ||
                       "Generando..."
@@ -2142,6 +2333,24 @@ export function App() {
             </div>
 
             <div className="audio-row">
+              {spec.scenes.some((s) => s.layout === "animated-stage") && (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={isBusy}
+                  onClick={() =>
+                    generateAllSvgs(spec, spec.animationStyle || animationStyle)
+                  }
+                >
+                  {svgsLoading
+                    ? h(Loader2, { size: 15, className: "spin" })
+                    : h(Sparkles, { size: 15 })}
+                  {svgsLoading
+                    ? svgsProgress || "Animando escenas..."
+                    : "Regenerar animaciones"}
+                </button>
+              )}
+
               <button
                 type="button"
                 className="btn-primary"
@@ -2227,6 +2436,7 @@ export function App() {
               </label>
             </div>
 
+            {svgError && <div className="error-banner">{svgError}</div>}
             {imageError && <div className="error-banner">{imageError}</div>}
             {voiceError && <div className="error-banner">{voiceError}</div>}
           </div>
@@ -2330,6 +2540,20 @@ export function App() {
                       }}
                     />
                     <span className="unit">s</span>
+
+                    {scene.layout !== "flyer-end" && (
+                      <button
+                        type="button"
+                        className={`icon-btn ${scene.svgScene ? "active-voice" : ""}`}
+                        title="Generar o regenerar animación SVG de esta escena"
+                        disabled={sceneSvgLoading === index || svgsLoading}
+                        onClick={() => regenerateSingleSceneSvg(index)}
+                      >
+                        {sceneSvgLoading === index
+                          ? h(Loader2, { size: 15, className: "spin" })
+                          : h(Sparkles, { size: 15 })}
+                      </button>
+                    )}
 
                     {scene.layout !== "flyer-end" && (
                       <button
@@ -2505,6 +2729,15 @@ export function App() {
                         }
                         placeholder="Etiqueta dinámica a mitad de escena (ej. PRESTACIONES DE LEY)"
                         className="callout-input"
+                      />
+                      <input
+                        type="text"
+                        value={scene.animationPrompt || ""}
+                        onChange={(e) =>
+                          updateScene(index, { animationPrompt: e.target.value })
+                        }
+                        placeholder="Prompt de animación SVG (personajes, ropa, pose y escenario; pulsa ✨ para regenerar)"
+                        className="prompt-input"
                       />
                       <input
                         type="text"

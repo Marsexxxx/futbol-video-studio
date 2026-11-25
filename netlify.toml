@@ -16,6 +16,10 @@
   function = "generate-image"
 
 [[edge_functions]]
+  path = "/api/generate-scene-svg"
+  function = "generate-scene-svg"
+
+[[edge_functions]]
   path = "/api/export-video"
   function = "export-video"
 

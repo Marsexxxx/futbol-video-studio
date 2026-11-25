@@ -183,60 +183,26 @@ const VALID_ANIMATION_STYLES = [
   "3d-explainer",
 ];
 
-const ANIMATION_STYLE_HINTS = {
-  "pixel-art":
-    "Estilo PIXEL ART: construye personajes, fondos y utilería exclusivamente con rectángulos y cuadrados pequeños (<rect>) alineados en grilla retro 8-bit/16-bit, sin curvas ni bordes redondeados, usando colores sólidos contrastados.",
-  chalkboard:
-    "Estilo PIZARRA (CHALKBOARD): usa trazos blancos (#F8FAFC), crema (#FDE68A) y verde/menta suave (#7EC34A) simulando dibujo a mano con tiza sobre pizarra oscura (fill=\"none\" o rellenos translúcidos suaves, stroke-linecap=\"round\", stroke-width=\"4\" a \"7\"). Aprovecha la clase anim-draw en trazos clave.",
-  "neon-sketch":
-    "Estilo BOCETO LUMINOSO (NEON SKETCH): usa contornos brillantes neón cian (#22D3EE), ámbar (#F59E0B) y magenta (#EC4899) con rellenos oscuros profundos (#060d1f / #0f172a) o translúcidos. Aprovecha anim-draw y anim-pulse.",
-  "ps2-retro":
-    "Estilo PS2 RETRO (LOW-POLY): construye siluetas y objetos con planos geométricos facetados (<polygon>) y sombreado angular de consola 2000s, con colores saturados y brillos geométricos.",
-  comic:
-    "Estilo CÓMIC: usa contornos negros gruesos (stroke=\"#0F172A\", stroke-width=\"6\" a \"9\"), colores planos vibrantes de historieta, líneas cinéticas de acción e incluye speechBubble corto (2 a 4 palabras) cuando aporte humor o impacto.",
-  "flat-vector":
-    "Estilo VECTOR PLANO (EDITORIAL MODERNO): usa formas limpias, proporciones estilizadas modernas y capas planas sin contorno (o contorno mínimo), con paleta limpia y legible.",
-  "minimal-line":
-    "Estilo LÍNEA MINIMALISTA (TINTA SOBRE BLANCO): usa trazos finos oscuros (#0F172A, stroke-width=\"3\" a \"5\", fill=\"none\" o blanco #FFFFFF) con pequeños acentos puntuales de color y sin rellenos oscuros pesados. Aprovecha anim-draw.",
-  cgi:
-    "Estilo CGI DRAMÁTICO: incluye <defs> con <radialGradient> y <linearGradient> para simular volumen 3D, iluminación cenital dramática, reflejos especulares y sombras suaves bajo los elementos. Aprovecha anim-pulse.",
-  lego:
-    "Estilo LEGO (BLOQUES STOP-MOTION): construye personajes y objetos con bloques rectangulares, cabezas cilíndricas con pivote superior, manos en C y pequeños círculos tipo stud en la parte superior de las piezas.",
-  "3d-explainer":
-    "Estilo 3D EXPLICATIVO (ESTUDIO SUAVE): usa formas muy redondeadas, gradientes pastel suaves en <defs>, personajes amigables y sombras ambientales limpias. Incluye speechBubble corto cuando ayude a explicar.",
-};
-
-const buildSvgStageInstructions = (animationStyle, isRecruitment) => `
-INSTRUCCIONES DE DISEÑO PARA "svgScene" (OBLIGATORIO CUANDO APLIQUE):
-- Cada "svgScene" debe ser un <svg viewBox="0 0 1080 1120" xmlns="http://www.w3.org/2000/svg">...</svg> limpio, autocontenido y compacto (ENTRE 25 y 65 primitivas SVG por escena para mantener el JSON rápido y válido).
-- PROHIBIDO usar CSS @keyframes, <style>, <script> o <foreignObject> dentro del SVG.
-- Dibuja personajes, objetos o escenarios MUY reconocibles y fieles al tema pedido (rasgos distintivos reales: peinado, barba, gafas, uniforme/camiseta con colores reales o vestimenta laboral, postura corporal, utilería y expresión facial).
-- NO repitas la misma composición ni diseño entre escenas: cada escena debe ilustrar visualmente la acción exacta de su guion en un encuadre distinto.
-- Organiza las partes móviles en grupos <g> usando estas clases semánticas (úsalas de forma natural según la acción):
-  * Fondo o entorno lento: class="anim-pan-bg"
-  * Torso / cuerpo principal con respiración: class="anim-bob"
-  * Cabeza: class="anim-head"
-  * Piernas opuestas al caminar/correr: class="anim-walk-leg-l" y class="anim-walk-leg-r"
-  * Brazos izquierdo y derecho: class="anim-arm-l" y class="anim-arm-r"
-  * Entrada lateral al iniciar la escena: class="anim-enter-left" o class="anim-enter-right"
-  * Elemento sorpresa o dato que aparece a mitad de escena: class="anim-pop"
-  * Trazos o líneas que se dibujan progresivamente: class="anim-draw"
-  * Objetos flotantes (íconos, nubes, balones, estrellas, documentos): class="anim-float"
-  * Brillo o energía pulsante: class="anim-pulse"
-- Estética obligatoria del SVG (${animationStyle}): ${ANIMATION_STYLE_HINTS[animationStyle] || ANIMATION_STYLE_HINTS["flat-vector"]}
-- Opcionalmente incluye "speechBubble" corto (2 a 4 palabras) cuando aporte dinamismo o claridad.${
+const buildAnimationPromptInstructions = (animationStyle, isRecruitment) => `
+INSTRUCCIONES PARA "animationPrompt" (NO generes código SVG aquí):
+- NO generes el campo "svgScene" ni código XML/SVG en esta respuesta para mantener la generación rápida.
+- Para cada escena con "layout": "animated-stage", escribe un "animationPrompt" muy concreto y visual (2 a 4 oraciones) describiendo:
+  1. Personajes o sujetos muy reconocibles (peinado, barba, gafas, uniforme/camiseta con colores exactos o vestimenta laboral, expresión facial, postura y acción exacta).
+  2. Escenario, objetos clave y movimiento sugerido (entradas laterales, gestos, elementos flotantes, estilo ${animationStyle}).
+- NO repitas la misma composición entre escenas: cada escena debe tener un encuadre y acción distinta fiel al guion.
+- Opcionalmente incluye "speechBubble" corto (2 a 4 palabras) cuando aporte dinamismo o humor.${
   isRecruitment
-    ? '\n- En Reclutamiento mantén los colores corporativos ASR Group (#008F4C, #7EC34A, #BCD853, #26282A, #FFFFFF) y NUNCA pongas "svgScene" en la escena final "flyer-end".'
+    ? '\n- En Reclutamiento mantén los colores corporativos ASR Group (#008F4C, #7EC34A, #BCD853, #26282A) y NUNCA pongas "animationPrompt" ni "animated-stage" en la escena final "flyer-end".'
     : ""
 }`;
 
 const RENDER_MODE_HINTS = {
-  animated: `MODO ANIMACIÓN DINÁMICA 100% (ESCENAS SVG POR CÓDIGO):
+  animated: `MODO ANIMACIÓN DINÁMICA 100% (GUION + DESCRIPCIÓN PARA ESCENAS ANIMADAS):
 - Usa "sceneMode": "animated" y "layout": "animated-stage" en TODAS las escenas (excepto "flyer-end" en reclutamiento).
-- Genera un "svgScene" único, expresivo y adaptado al guion en CADA escena (sin fotos IA; deja "imagePrompt": "").`,
+- Describe cada escena en "animationPrompt" con máximo detalle visual y deja "imagePrompt": "".`,
   hybrid: `MODO HÍBRIDO (OBLIGATORIO MEZCLAR):
-- Alterna inteligentemente entre escenas visuales ("sceneMode": "hybrid" con "imagePrompt" detallado) y escenas animadas por código ("sceneMode": "editorial", "layout": "animated-stage" con "svgScene" único y expresivo).
-- Incluye al menos 2 escenas clave con "layout": "animated-stage" y "svgScene" único adaptado al guion, sin repetir diseños entre escenas.`,
+- Alterna inteligentemente entre escenas visuales ("sceneMode": "hybrid" con "imagePrompt" detallado) y escenas animadas por código ("sceneMode": "editorial", "layout": "animated-stage" con "animationPrompt" muy concreto).
+- Incluye al menos 2 escenas clave con "layout": "animated-stage" y "animationPrompt" único adaptado al guion, sin repetir diseños entre escenas.`,
   editorial: `MODO EDITORIAL / MOTION GRAPHICS:
 - Usa "sceneMode": "editorial" en TODAS las escenas para lograr una estética limpia de motion graphics estilo Vox/Johnny Harris con íconos dinámicos, formas animadas y tarjetas editoriales.`,
   cinematic: `MODO CINEMATOGRÁFICO:
@@ -275,9 +241,13 @@ export default async (req) => {
     const safeAnimationStyle = VALID_ANIMATION_STYLES.includes(animationStyle)
       ? animationStyle
       : "flat-vector";
-    const includeSvgStage = renderMode === "animated" || renderMode === "hybrid";
-    const svgStageHint = includeSvgStage
-      ? buildSvgStageInstructions(safeAnimationStyle, studioMode === "recruitment" || topicMode === "recruitment")
+    const includeAnimationPrompt =
+      renderMode === "animated" || renderMode === "hybrid";
+    const animationPromptHint = includeAnimationPrompt
+      ? buildAnimationPromptInstructions(
+          safeAnimationStyle,
+          studioMode === "recruitment" || topicMode === "recruitment"
+        )
       : "";
 
     const isRecruitment = studioMode === "recruitment" || topicMode === "recruitment";
@@ -309,9 +279,9 @@ export default async (req) => {
       ? `Eres director creativo especialista en Employer Branding y videos verticales 9:16 de RECLUTAMIENTO LABORAL para redes sociales (TikTok, Reels, Facebook, WhatsApp Status) en español.
 Empresa que contrata: "${companyName}" (sector agroindustrial / caña de azúcar).
 ${modeHint}
-${svgStageHint}
+${animationPromptHint}
 
-Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
+Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura (SIN código SVG):
 {
   "title": "Vacante: Nombre del puesto",
   "theme": {
@@ -336,7 +306,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
       "subtitle": "Locución natural, cercana y profesional en español.",
       "imagePrompt": "Detailed ENGLISH visual prompt depicting authentic modern agricultural/industrial workplace, friendly Mexican professionals, sugarcane fields, machinery, or modern office matching the exact job role, natural daylight, green and neutral gray color harmony, vertical 9:16 frame, strictly NO text, NO logos, NO borders (or empty string if layout is animated-stage).",
       "fallbackImagePrompt": "Clean modern editorial illustration of the workplace and job role in green and gray tones, vertical 9:16, strictly NO text.",
-      "svgScene": "Solo cuando sceneMode es animated o layout es animated-stage (y NUNCA en flyer-end): <svg viewBox=\"0 0 1080 1120\" xmlns=\"http://www.w3.org/2000/svg\">...</svg> único y expresivo con 25 a 65 primitivas y clases anim-*.",
+      "animationPrompt": "Solo cuando layout es animated-stage (y NUNCA en flyer-end): descripción muy concreta de personajes reconocibles (peinado, ropa laboral, expresión facial, postura/acción), utilería y elementos del escenario.",
       "speechBubble": "Texto muy corto opcional (2 a 4 palabras) para globo de diálogo",
       "highlightValue": "Dato breve si aplica (ej. 100%, INMEDIATA, +BONOS)",
       "stampText": "VACANTE ACTIVA",
@@ -351,8 +321,8 @@ REGLAS ESTRICTAS PARA VIDEOS DE RECLUTAMIENTO:
 1. Duración objetivo EXACTA: ${effectiveDuration} segundos.
 2. Genera EXACTAMENTE ${sceneCount} escenas en total:
    - Las primeras ${sceneCount - 1} escenas presentan la vacante de forma dinámica y atractiva:
-     * Si renderMode es "animated", TODAS las primeras ${sceneCount - 1} escenas deben tener "sceneMode": "animated", "layout": "animated-stage" y un "svgScene" único y diferente en cada escena (y "imagePrompt": "").
-     * Si renderMode es "hybrid", usa "layout": "animated-stage" con "svgScene" en las escenas editoriales/animadas y fotos en las demás.
+     * Si renderMode es "animated", TODAS las primeras ${sceneCount - 1} escenas deben tener "sceneMode": "animated", "layout": "animated-stage" y un "animationPrompt" muy concreto y diferente en cada escena (y "imagePrompt": "").
+     * Si renderMode es "hybrid", usa "layout": "animated-stage" con "animationPrompt" en las escenas editoriales/animadas y fotos en las demás.
      * En otros modos, alterna dinámicamente entre "hero-impact", "story-clean", "cta-engage", "stat-overlay" o "quote-press".
    - LA ÚLTIMA ESCENA (escena #${sceneCount}) DEBE SER OBLIGATORIAMENTE:
      * "layout": "flyer-end"
@@ -361,7 +331,7 @@ REGLAS ESTRICTAS PARA VIDEOS DE RECLUTAMIENTO:
      * "badge": "INFORMACIÓN Y CONTACTO"
      * "title": "POSTÚLATE HOY"
      * "subtitle": Una invitación breve y cálida de cierre (10 a 15 palabras) invitando a revisar el flyer en pantalla, tomar captura o enviar su solicitud.
-     * "imagePrompt": "" (vacío) y SIN "svgScene".
+     * "imagePrompt": "" (vacío) y SIN "animationPrompt".
 3. Mantén el campo "subtitle" de las primeras ${sceneCount - 1} escenas entre ${minWordsPerScene} y ${maxWordsPerScene} palabras para respetar los ${effectiveDuration} segundos reales.
 4. Usa SIEMPRE exactamente los colores oficiales verde y gris en "theme": primaryColor "#008F4C", secondaryColor "#7EC34A", accentColor "#BCD853", bgColor "#26282A".
 5. PROHIBIDO usar "type": "tactics" o "layout": "split-versus" salvo que el prompt pida explícitamente comparar cifras/porcentajes o una pizarra táctica de fútbol.
@@ -370,9 +340,9 @@ REGLAS ESTRICTAS PARA VIDEOS DE RECLUTAMIENTO:
       : `Eres director creativo, guionista y director de motion graphics para videos verticales 9:16 virales en español sobre CUALQUIER temática (TikTok / Reels / YouTube Shorts).
 ${topicHint}
 ${modeHint}
-${svgStageHint}
+${animationPromptHint}
 
-Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
+Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura (SIN código SVG):
 {
   "title": "Título corto del video",
   "theme": {
@@ -397,7 +367,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
       "subtitle": "Locución natural en español ajustada exactamente al límite de palabras.",
       "imagePrompt": "Detailed ENGLISH visual prompt describing a vertical 9:16 scene matching the exact topic, people/subjects, setting, lighting, and camera angle. Strictly NO text, NO borders (or empty string if layout is animated-stage).",
       "fallbackImagePrompt": "Alternative ENGLISH visual prompt describing the same scene in dramatic editorial style with zero text.",
-      "svgScene": "Cuando sceneMode es animated o layout es animated-stage: <svg viewBox=\"0 0 1080 1120\" xmlns=\"http://www.w3.org/2000/svg\">...</svg> único, expresivo y adaptado al guion (25 a 65 primitivas SVG) con clases anim-*.",
+      "animationPrompt": "Cuando layout es animated-stage: descripción visual concreta de personajes reconocibles (peinado, barba, gafas, uniforme/ropa exacta, expresión facial, postura/acción), objetos y escenario sin repetir entre escenas.",
       "speechBubble": "Texto muy corto opcional (2 a 4 palabras) para globo de diálogo",
       "highlightValue": "Dato corto si aplica",
       "stampText": "CLAVE",
@@ -416,7 +386,7 @@ REGLAS ESTRICTAS DE DURACIÓN (CRÍTICO):
 REGLAS DE DINAMISMO VISUAL Y ANTI-PLANTILLAS:
 4. PROHIBIDO usar "type": "tactics" (el tablero fijo) salvo que el usuario pida explícitamente "pizarra táctica de fútbol". En cualquier otro caso usa siempre "type": "cinematic".
 5. PROHIBIDO usar "layout": "split-versus" (barras de porcentaje) salvo que el prompt del usuario pida explícitamente comparar dos cifras o porcentajes.
-6. Cuando renderMode sea "animated", TODAS las escenas deben usar "sceneMode": "animated", "layout": "animated-stage" y un "svgScene" único y creativo por escena. En modo "hybrid", usa "layout": "animated-stage" + "svgScene" en las escenas editoriales/animadas sin repetir composiciones.
+6. Cuando renderMode sea "animated", TODAS las escenas deben usar "sceneMode": "animated", "layout": "animated-stage" y un "animationPrompt" muy detallado y creativo por escena. En modo "hybrid", usa "layout": "animated-stage" + "animationPrompt" en las escenas editoriales/animadas sin repetir composiciones.
 7. Elige un "iconName" específico y coherente en CADA escena, y escribe un "calloutText" breve (2 a 4 palabras).
 8. Varía "layout", "cameraMotion" y "transition" entre escenas consecutivas para que el video tenga ritmo real.
 9. Adapta "theme" a la paleta cromática real del tema.
@@ -428,13 +398,13 @@ REGLAS DE DINAMISMO VISUAL Y ANTI-PLANTILLAS:
       generationConfig: {
         responseMimeType: "application/json",
         temperature: isRecruitment ? 0.68 : 0.78,
-        maxOutputTokens: 16000,
+        maxOutputTokens: 8500,
         ...(disableThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
       },
     });
 
     const startTime = Date.now();
-    const maxBudgetMs = 48000;
+    const maxBudgetMs = 34000;
     let lastResult = { ok: false, status: 503, data: {} };
     let usedModel = primaryModel;
 
@@ -512,7 +482,12 @@ REGLAS DE DINAMISMO VISUAL Y ANTI-PLANTILLAS:
 
     const normalizeGeneratedScene = (scene, idx, isLastRecruitment) => {
       if (isLastRecruitment) {
-        const { svgScene: _s, speechBubble: _b, ...rest } = scene;
+        const {
+          svgScene: _s,
+          speechBubble: _b,
+          animationPrompt: _ap,
+          ...rest
+        } = scene;
         return {
           ...rest,
           type: "cinematic",
@@ -538,6 +513,10 @@ REGLAS DE DINAMISMO VISUAL Y ANTI-PLANTILLAS:
           ? "cinematic"
           : scene.sceneMode || (idx % 2 === 1 ? "editorial" : "hybrid");
 
+      const hasAnimationPrompt = Boolean(
+        typeof scene.animationPrompt === "string" &&
+          scene.animationPrompt.trim()
+      );
       const hasSvg = Boolean(
         typeof scene.svgScene === "string" && scene.svgScene.trim()
       );
@@ -545,13 +524,22 @@ REGLAS DE DINAMISMO VISUAL Y ANTI-PLANTILLAS:
       let nextLayout = scene.layout;
       if (!wantsComparison && nextLayout === "split-versus") {
         nextLayout =
-          nextSceneMode === "animated" || hasSvg
+          nextSceneMode === "animated" ||
+          hasAnimationPrompt ||
+          hasSvg ||
+          (renderMode === "hybrid" && nextSceneMode === "editorial")
             ? "animated-stage"
             : "story-clean";
       }
       if (nextSceneMode === "animated") {
         nextLayout = "animated-stage";
-      } else if (renderMode === "hybrid" && hasSvg) {
+      } else if (
+        renderMode === "hybrid" &&
+        (nextLayout === "animated-stage" ||
+          nextSceneMode === "editorial" ||
+          hasAnimationPrompt ||
+          hasSvg)
+      ) {
         nextLayout = "animated-stage";
       } else if (!nextLayout && nextType !== "tactics") {
         nextLayout = "story-clean";
