@@ -1,13 +1,171 @@
-:root {
+@property --btn-grad-1 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #004d98;
+}
+
+@property --btn-grad-2 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #a50044;
+}
+
+@property --header-c1 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #004d98;
+}
+
+@property --header-c2 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #a50044;
+}
+
+@property --header-c3 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #edbb00;
+}
+
+:root,
+[data-theme="general"] {
   color-scheme: dark;
-  --bg: #090d16;
-  --surface: #111827;
-  --surface-2: #182133;
-  --border: #243045;
+  --bg: #07111f;
+  --bg-elevated: #0b192e;
+  --surface: rgba(11, 24, 45, 0.88);
+  --surface-2: rgba(16, 34, 62, 0.86);
+  --surface-hover: rgba(23, 47, 84, 0.94);
+  --surface-input: #050d19;
+  --header-bg: rgba(7, 17, 31, 0.86);
+  --tabs-track-bg: rgba(5, 13, 25, 0.88);
+  --border: rgba(52, 102, 168, 0.34);
+  --border-hover: rgba(237, 187, 0, 0.55);
+  --border-active: #edbb00;
   --text: #f8fafc;
-  --muted: #94a3b8;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
+  --muted: #9cb2cf;
+  --primary: #004d98;
+  --secondary: #a50044;
+  --accent: #edbb00;
+  --accent-soft: #f7d86a;
+  --btn-grad-1: #004d98;
+  --btn-grad-2: #a50044;
+  --btn-border-color: rgba(237, 187, 0, 0.52);
+  --btn-shadow: 0 8px 22px rgba(0, 77, 152, 0.36), 0 0 0 1px rgba(237, 187, 0, 0.16) inset;
+  --btn-shadow-hover: 0 10px 26px rgba(165, 0, 68, 0.38), 0 0 18px rgba(237, 187, 0, 0.22);
+  --header-c1: #004d98;
+  --header-c2: #a50044;
+  --header-c3: #edbb00;
+  --pill-bg: rgba(0, 77, 152, 0.28);
+  --pill-border: rgba(237, 187, 0, 0.42);
+  --pill-text: #f7d86a;
+  --badge-bg: rgba(0, 77, 152, 0.28);
+  --badge-border: rgba(237, 187, 0, 0.45);
+  --badge-text: #f7d86a;
+  --card-accent-border: rgba(0, 77, 152, 0.55);
+  --card-accent-shadow: 0 14px 36px rgba(0, 20, 48, 0.45), inset 0 1px 0 rgba(237, 187, 0, 0.12);
+  --tab-active-border: rgba(237, 187, 0, 0.65);
+  --tab-active-shadow: 0 8px 24px rgba(0, 77, 152, 0.34), 0 0 18px rgba(165, 0, 68, 0.22);
+  --chip-bg: rgba(7, 17, 31, 0.72);
+  --chip-active-border: #edbb00;
+  --chip-active-bg: rgba(0, 77, 152, 0.38);
+  --chip-active-text: #ffffff;
+  --chip-active-shadow: 0 0 14px rgba(237, 187, 0, 0.22);
+  --focus-border: #edbb00;
+  --focus-ring: rgba(237, 187, 0, 0.16);
+  --active-media-border: #edbb00;
+  --active-media-text: #f7d86a;
+  --active-media-bg: rgba(237, 187, 0, 0.12);
+  --active-video-border: #3b82f6;
+  --active-video-text: #93c5fd;
+  --active-video-bg: rgba(0, 77, 152, 0.26);
+  --video-chip-bg: rgba(0, 77, 152, 0.2);
+  --video-chip-border: rgba(59, 130, 246, 0.42);
+  --video-chip-text: #bfdbfe;
+  --callout-text: #f7d86a;
+  --prompt-text: #93c5fd;
+  --banner-bg: rgba(0, 77, 152, 0.28);
+  --banner-border: rgba(237, 187, 0, 0.42);
+  --banner-text: #e2e8f0;
+  --link-color: #f7d86a;
+  --phone-bezel: #102542;
+  --phone-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 42px rgba(0, 77, 152, 0.22);
+  --checkbox-accent: #edbb00;
+  --btn-success-bg: #16a34a;
+  --btn-success-hover: #15803d;
+  --btn-success-border: rgba(34, 197, 94, 0.5);
+  --sweep-color-1: rgba(0, 77, 152, 0.24);
+  --sweep-color-2: rgba(165, 0, 68, 0.18);
+  --sweep-sheen: rgba(237, 187, 0, 0.12);
+}
+
+[data-theme="recruitment"] {
+  --bg: #1e2022;
+  --bg-elevated: #26282a;
+  --surface: rgba(38, 40, 42, 0.92);
+  --surface-2: rgba(48, 51, 54, 0.88);
+  --surface-hover: rgba(58, 61, 65, 0.95);
+  --surface-input: #191b1d;
+  --header-bg: rgba(30, 32, 34, 0.88);
+  --tabs-track-bg: rgba(25, 27, 29, 0.9);
+  --border: rgba(99, 100, 102, 0.52);
+  --border-hover: rgba(167, 169, 172, 0.72);
+  --border-active: #bcd853;
+  --text: #f5f7f5;
+  --muted: #a7a9ac;
+  --primary: #008f4c;
+  --secondary: #7ec34a;
+  --accent: #bcd853;
+  --accent-soft: #d9ea9a;
+  --btn-grad-1: #008f4c;
+  --btn-grad-2: #7ec34a;
+  --btn-border-color: rgba(188, 216, 83, 0.65);
+  --btn-shadow: 0 8px 22px rgba(0, 143, 76, 0.34), 0 0 0 1px rgba(217, 234, 154, 0.14) inset;
+  --btn-shadow-hover: 0 10px 26px rgba(0, 143, 76, 0.44), 0 0 18px rgba(188, 216, 83, 0.24);
+  --header-c1: #008f4c;
+  --header-c2: #7ec34a;
+  --header-c3: #bcd853;
+  --pill-bg: rgba(0, 143, 76, 0.22);
+  --pill-border: rgba(126, 195, 74, 0.48);
+  --pill-text: #d9ea9a;
+  --badge-bg: rgba(0, 143, 76, 0.22);
+  --badge-border: rgba(126, 195, 74, 0.48);
+  --badge-text: #d9ea9a;
+  --card-accent-border: rgba(126, 195, 74, 0.5);
+  --card-accent-shadow: 0 14px 36px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(217, 234, 154, 0.12);
+  --tab-active-border: rgba(188, 216, 83, 0.68);
+  --tab-active-shadow: 0 8px 24px rgba(0, 143, 76, 0.32), 0 0 18px rgba(126, 195, 74, 0.18);
+  --chip-bg: rgba(30, 32, 34, 0.78);
+  --chip-active-border: #bcd853;
+  --chip-active-bg: rgba(0, 143, 76, 0.32);
+  --chip-active-text: #ffffff;
+  --chip-active-shadow: 0 0 14px rgba(188, 216, 83, 0.2);
+  --focus-border: #7ec34a;
+  --focus-ring: rgba(126, 195, 74, 0.18);
+  --active-media-border: #7ec34a;
+  --active-media-text: #d9ea9a;
+  --active-media-bg: rgba(0, 143, 76, 0.18);
+  --active-video-border: #bcd853;
+  --active-video-text: #d9ea9a;
+  --active-video-bg: rgba(126, 195, 74, 0.18);
+  --video-chip-bg: rgba(0, 143, 76, 0.16);
+  --video-chip-border: rgba(126, 195, 74, 0.45);
+  --video-chip-text: #d9ea9a;
+  --callout-text: #bcd853;
+  --prompt-text: #d9ea9a;
+  --banner-bg: rgba(0, 143, 76, 0.22);
+  --banner-border: rgba(126, 195, 74, 0.45);
+  --banner-text: #e5e7eb;
+  --link-color: #d9ea9a;
+  --phone-bezel: #313437;
+  --phone-shadow: 0 24px 60px rgba(0, 0, 0, 0.62), 0 0 42px rgba(0, 143, 76, 0.2);
+  --checkbox-accent: #7ec34a;
+  --btn-success-bg: #008f4c;
+  --btn-success-hover: #007840;
+  --btn-success-border: rgba(188, 216, 83, 0.6);
+  --sweep-color-1: rgba(0, 143, 76, 0.24);
+  --sweep-color-2: rgba(188, 216, 83, 0.14);
+  --sweep-sheen: rgba(217, 234, 154, 0.13);
 }
 
 * {
@@ -19,12 +177,79 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: Inter, system-ui, -apple-system, sans-serif;
+  transition: background-color 0.55s ease, color 0.55s ease;
 }
 
 .studio-shell {
+  position: relative;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background-color: var(--bg);
+  color: var(--text);
+  overflow-x: clip;
+  transition: background-color 0.55s ease, color 0.55s ease;
+}
+
+.studio-shell::before,
+.studio-shell::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 0.55s ease;
+}
+
+.studio-shell::before {
+  background:
+    radial-gradient(ellipse 65% 55% at 12% 8%, rgba(0, 77, 152, 0.36) 0%, transparent 68%),
+    radial-gradient(ellipse 58% 50% at 88% 14%, rgba(165, 0, 68, 0.28) 0%, transparent 66%),
+    radial-gradient(ellipse 55% 45% at 22% 88%, rgba(165, 0, 68, 0.16) 0%, transparent 65%),
+    radial-gradient(ellipse 40% 35% at 72% 76%, rgba(237, 187, 0, 0.08) 0%, transparent 62%);
+  opacity: 1;
+}
+
+.studio-shell::after {
+  background:
+    radial-gradient(ellipse 64% 54% at 14% 8%, rgba(0, 143, 76, 0.3) 0%, transparent 68%),
+    radial-gradient(ellipse 56% 48% at 88% 16%, rgba(126, 195, 74, 0.2) 0%, transparent 66%),
+    radial-gradient(ellipse 52% 44% at 26% 88%, rgba(188, 216, 83, 0.11) 0%, transparent 64%),
+    radial-gradient(ellipse 46% 38% at 78% 80%, rgba(99, 100, 102, 0.18) 0%, transparent 62%);
+  opacity: 0;
+}
+
+.studio-shell[data-theme="recruitment"]::before {
+  opacity: 0;
+}
+
+.studio-shell[data-theme="recruitment"]::after {
+  opacity: 1;
+}
+
+.theme-ambient-sweep {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background:
+    radial-gradient(circle at 24% 20%, var(--sweep-color-1) 0%, transparent 52%),
+    radial-gradient(circle at 76% 30%, var(--sweep-color-2) 0%, transparent 50%);
+  animation: ambientSweep 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes ambientSweep {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  30% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.04);
+  }
 }
 
 .studio-header {
@@ -34,12 +259,25 @@ body {
   gap: 12px;
   padding: 14px 24px;
   border-bottom: 1px solid var(--border);
-  background: rgba(17, 24, 39, 0.85);
-  backdrop-filter: blur(10px);
+  background: var(--header-bg);
+  backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
   z-index: 20;
   flex-wrap: wrap;
+  transition: background-color 0.55s ease, border-color 0.55s ease;
+}
+
+.studio-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--header-c1) 0%, var(--header-c2) 55%, var(--header-c3) 100%);
+  opacity: 0.9;
+  transition: --header-c1 0.55s ease, --header-c2 0.55s ease, --header-c3 0.55s ease;
 }
 
 .brand {
@@ -48,6 +286,37 @@ body {
   gap: 10px;
   font-weight: 700;
   font-size: 16px;
+}
+
+.brand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--btn-grad-1), var(--btn-grad-2));
+  border: 1px solid var(--btn-border-color);
+  color: #ffffff;
+  box-shadow: 0 4px 14px var(--btn-glow);
+  transition:
+    --btn-grad-1 0.55s ease,
+    --btn-grad-2 0.55s ease,
+    border-color 0.55s ease,
+    box-shadow 0.55s ease;
+}
+
+.brand-mode-pill {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  color: var(--pill-text);
+  transition: background-color 0.55s ease, border-color 0.55s ease, color 0.55s ease;
 }
 
 .header-actions {
@@ -60,14 +329,17 @@ body {
 .pill {
   font-size: 12px;
   font-weight: 600;
-  color: var(--muted);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  color: var(--pill-text);
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
   padding: 6px 12px;
   border-radius: 999px;
+  transition: background-color 0.55s ease, border-color 0.55s ease, color 0.55s ease;
 }
 
 .studio-grid {
+  position: relative;
+  z-index: 2;
   display: grid;
   grid-template-columns: minmax(340px, 1.15fr) minmax(320px, 0.85fr);
   gap: 24px;
@@ -92,6 +364,17 @@ body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  backdrop-filter: blur(8px);
+  transition: background-color 0.55s ease, border-color 0.55s ease, box-shadow 0.55s ease;
+}
+
+.general-card {
+  border-color: var(--card-accent-border);
+  box-shadow: var(--card-accent-shadow);
+}
+
+.general-title {
+  color: var(--accent-soft);
 }
 
 .card-header-between {
@@ -107,6 +390,7 @@ body {
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
+  transition: color 0.55s ease;
 }
 
 textarea,
@@ -114,7 +398,7 @@ input[type="text"],
 input[type="number"],
 select {
   width: 100%;
-  background: var(--bg);
+  background: var(--surface-input);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -122,12 +406,18 @@ select {
   font-family: inherit;
   font-size: 14px;
   outline: none;
+  transition:
+    background-color 0.55s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    color 0.55s ease;
 }
 
 textarea:focus,
 input:focus,
 select:focus {
-  border-color: var(--accent);
+  border-color: var(--focus-border);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .form-row {
@@ -144,6 +434,7 @@ select:focus {
   gap: 8px;
   font-size: 13px;
   color: var(--muted);
+  transition: color 0.55s ease;
 }
 
 .duration-field input {
@@ -162,16 +453,29 @@ select:focus {
   font-weight: 600;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: background 0.15s ease;
+  transition:
+    --btn-grad-1 0.55s ease,
+    --btn-grad-2 0.55s ease,
+    background-color 0.55s ease,
+    border-color 0.55s ease,
+    color 0.55s ease,
+    box-shadow 0.55s ease,
+    transform 0.18s ease,
+    filter 0.18s ease;
 }
 
 .btn-primary {
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--btn-grad-1), var(--btn-grad-2));
+  border-color: var(--btn-border-color);
+  box-shadow: var(--btn-shadow);
   color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  filter: brightness(1.1);
+  box-shadow: var(--btn-shadow-hover);
+  transform: translateY(-1px);
 }
 
 .btn-primary:disabled {
@@ -186,7 +490,8 @@ select:focus {
 }
 
 .btn-secondary:hover {
-  border-color: #3b4c6b;
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
 }
 
 .error-banner {
@@ -214,6 +519,7 @@ select:focus {
   border-radius: 10px;
   padding: 6px 10px;
   font-size: 13px;
+  transition: background-color 0.55s ease, border-color 0.55s ease;
 }
 
 .scene-list {
@@ -230,6 +536,7 @@ select:focus {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  transition: background-color 0.55s ease, border-color 0.55s ease;
 }
 
 .scene-card-top {
@@ -243,6 +550,7 @@ select:focus {
   font-weight: 700;
   color: var(--muted);
   min-width: 24px;
+  transition: color 0.55s ease;
 }
 
 .sec-input {
@@ -253,6 +561,7 @@ select:focus {
 .unit {
   font-size: 13px;
   color: var(--muted);
+  transition: color 0.55s ease;
 }
 
 .icon-btn {
@@ -262,10 +571,15 @@ select:focus {
   width: 34px;
   height: 34px;
   border-radius: 8px;
-  background: var(--bg);
+  background: var(--surface-input);
   border: 1px solid var(--border);
   color: var(--text);
   cursor: pointer;
+  transition: background-color 0.55s ease, border-color 0.35s ease, color 0.35s ease;
+}
+
+.icon-btn:hover:not(:disabled) {
+  border-color: var(--border-hover);
 }
 
 .icon-btn.danger:hover:not(:disabled) {
@@ -286,10 +600,11 @@ select:focus {
   background: #000000;
   border-radius: 28px;
   overflow: hidden;
-  border: 6px solid #1e293b;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  border: 6px solid var(--phone-bezel);
+  box-shadow: var(--phone-shadow);
   position: sticky;
   top: 84px;
+  transition: border-color 0.55s ease, box-shadow 0.55s ease;
 }
 
 @media (max-width: 920px) {
@@ -322,25 +637,29 @@ select:focus {
   font-size: 13px;
   color: var(--muted);
   cursor: pointer;
+  transition: color 0.55s ease;
 }
 
 .checkbox-field input {
   width: auto;
+  accent-color: var(--checkbox-accent);
 }
 
 .status-badge {
   font-size: 12px;
   font-weight: 600;
-  color: #86efac;
-  background: rgba(34, 197, 94, 0.14);
-  border: 1px solid rgba(34, 197, 94, 0.35);
+  color: var(--badge-text);
+  background: var(--badge-bg);
+  border: 1px solid var(--badge-border);
   padding: 4px 10px;
   border-radius: 999px;
+  transition: background-color 0.55s ease, border-color 0.55s ease, color 0.55s ease;
 }
 
 .icon-btn.active-voice {
-  border-color: #22c55e;
-  color: #86efac;
+  border-color: var(--active-media-border);
+  color: var(--active-media-text);
+  background: var(--active-media-bg);
 }
 
 @media (max-width: 640px) {
@@ -371,19 +690,22 @@ select:focus {
   gap: 7px;
   padding: 9px 14px;
   border-radius: 10px;
-  border: 1px solid rgba(34, 197, 94, 0.5);
-  background: #16a34a;
+  border: 1px solid var(--btn-success-border);
+  background: var(--btn-success-bg);
   color: #ffffff;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
+  transition: background-color 0.55s ease, border-color 0.55s ease;
 }
 
 .btn-success:hover {
-  background: #15803d;
+  background: var(--btn-success-hover);
 }
 
 .export-banner {
+  position: relative;
+  z-index: 2;
   margin: 12px 24px 0;
   padding: 12px 16px;
   border-radius: 12px;
@@ -392,9 +714,10 @@ select:focus {
   justify-content: space-between;
   gap: 12px;
   font-size: 13px;
-  border: 1px solid rgba(96, 165, 250, 0.35);
-  background: rgba(30, 58, 138, 0.25);
-  color: #e2e8f0;
+  border: 1px solid var(--banner-border);
+  background: var(--banner-bg);
+  color: var(--banner-text);
+  transition: background-color 0.55s ease, border-color 0.55s ease, color 0.55s ease;
 }
 
 .export-banner.export-completed {
@@ -420,9 +743,10 @@ select:focus {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: #93c5fd;
+  color: var(--link-color);
   text-decoration: none;
   font-weight: 600;
+  transition: color 0.55s ease;
 }
 
 .export-link:hover {
@@ -450,7 +774,7 @@ select:focus {
 
 .prompt-input {
   font-size: 12px !important;
-  color: #93c5fd !important;
+  color: var(--prompt-text) !important;
 }
 
 .duration-presets {
@@ -462,19 +786,25 @@ select:focus {
 .preset-chip {
   padding: 5px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: rgba(15, 23, 42, 0.6);
-  color: #cbd5e1;
+  border: 1px solid var(--border);
+  background: var(--chip-bg);
+  color: var(--muted);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  transition:
+    background-color 0.55s ease,
+    border-color 0.35s ease,
+    color 0.35s ease,
+    box-shadow 0.35s ease;
 }
 
 .preset-chip.active,
 .preset-chip:hover {
-  border-color: #38bdf8;
-  background: rgba(56, 189, 248, 0.18);
-  color: #ffffff;
+  border-color: var(--chip-active-border);
+  background: var(--chip-active-bg);
+  color: var(--chip-active-text);
+  box-shadow: var(--chip-active-shadow);
 }
 
 .scene-motion-row {
@@ -485,13 +815,13 @@ select:focus {
 
 .callout-input {
   font-size: 12px !important;
-  color: #fde047 !important;
+  color: var(--callout-text) !important;
 }
 
 .icon-btn.active-video {
-  border-color: #38bdf8;
-  color: #7dd3fc;
-  background: rgba(56, 189, 248, 0.14);
+  border-color: var(--active-video-border);
+  color: var(--active-video-text);
+  background: var(--active-video-bg);
 }
 
 .video-chip-row {
@@ -501,10 +831,11 @@ select:focus {
   gap: 8px;
   padding: 6px 10px;
   border-radius: 8px;
-  background: rgba(56, 189, 248, 0.1);
-  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: var(--video-chip-bg);
+  border: 1px solid var(--video-chip-border);
   font-size: 12px;
-  color: #bae6fd;
+  color: var(--video-chip-text);
+  transition: background-color 0.55s ease, border-color 0.55s ease, color 0.55s ease;
 }
 
 .video-chip-label,
@@ -520,11 +851,12 @@ select:focus {
   gap: 4px;
   padding: 3px 8px;
   border-radius: 6px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(15, 23, 42, 0.7);
-  color: #e2e8f0;
+  border: 1px solid var(--border);
+  background: var(--surface-input);
+  color: var(--text);
   font-size: 11px;
   cursor: pointer;
+  transition: background-color 0.55s ease, border-color 0.35s ease, color 0.35s ease;
 }
 
 .mini-chip-btn.danger {
@@ -539,41 +871,151 @@ select:focus {
 }
 
 .studio-tabs {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 16px;
+  background: var(--tabs-track-bg);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: background-color 0.55s ease, border-color 0.55s ease;
+}
+
+.studio-tabs-indicator {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: calc((100% - 16px) / 2);
+  height: calc(100% - 10px);
+  border-radius: 12px;
+  border: 1px solid var(--tab-active-border);
+  box-shadow: var(--tab-active-shadow);
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  transform: translate3d(0, 0, 0);
+  transition:
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.55s ease,
+    box-shadow 0.55s ease;
+}
+
+.studio-tabs[data-active="recruitment"] .studio-tabs-indicator {
+  transform: translate3d(calc(100% + 6px), 0, 0);
+}
+
+.studio-tabs-indicator::before,
+.studio-tabs-indicator::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.55s ease;
+}
+
+.studio-tabs-indicator::before {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 77, 152, 0.62) 0%,
+    rgba(165, 0, 68, 0.46) 100%
+  );
+  opacity: 1;
+}
+
+.studio-tabs-indicator::after {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 143, 76, 0.52) 0%,
+    rgba(126, 195, 74, 0.32) 100%
+  );
+  opacity: 0;
+}
+
+.studio-tabs[data-active="recruitment"] .studio-tabs-indicator::before {
+  opacity: 0;
+}
+
+.studio-tabs[data-active="recruitment"] .studio-tabs-indicator::after {
+  opacity: 1;
 }
 
 .studio-tab {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   padding: 11px 14px;
   border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(15, 23, 42, 0.65);
-  color: #cbd5e1;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: color 0.35s ease, transform 0.2s ease;
+}
+
+.studio-tab:hover:not(.active) {
+  color: var(--text);
 }
 
 .studio-tab.active {
-  border-color: #38bdf8;
-  background: rgba(56, 189, 248, 0.16);
   color: #ffffff;
 }
 
-.studio-tab.recruitment.active {
-  border-color: #7ec34a;
-  background: linear-gradient(135deg, rgba(0, 143, 76, 0.35), rgba(126, 195, 74, 0.2));
-  color: #ffffff;
+.tab-panel-stage {
+  position: relative;
+  animation: tabPanelEnter 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.tab-panel-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 20%,
+    var(--sweep-sheen) 50%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: panelSheenSweep 0.65s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes tabPanelEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes panelSheenSweep {
+  0% {
+    opacity: 0;
+    background-position: 140% 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    background-position: -90% 0;
+  }
 }
 
 .recruitment-card {
-  border-color: rgba(126, 195, 74, 0.45) !important;
+  border-color: var(--card-accent-border) !important;
+  box-shadow: var(--card-accent-shadow);
 }
 
 .recruitment-title {
@@ -600,8 +1042,9 @@ select:focus {
   gap: 8px;
   padding: 10px 12px;
   border-radius: 10px;
-  background: rgba(38, 40, 42, 0.55);
-  border: 1px solid rgba(167, 169, 172, 0.25);
+  background: rgba(30, 32, 34, 0.68);
+  border: 1px solid rgba(167, 169, 172, 0.28);
+  transition: background-color 0.55s ease, border-color 0.55s ease;
 }
 
 .recruitment-grid {
@@ -649,6 +1092,15 @@ select:focus {
   font-size: 13px;
   font-weight: 800;
   cursor: pointer;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--btn-shadow);
+  transition: filter 0.18s ease, transform 0.18s ease, box-shadow 0.35s ease;
+}
+
+.btn-recruitment:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: var(--btn-shadow-hover);
 }
 
 .btn-recruitment:disabled {
@@ -668,6 +1120,12 @@ select:focus {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+.btn-recruitment-outline:hover {
+  background: rgba(0, 143, 76, 0.28);
+  border-color: #bcd853;
 }
 
 .flyer-scene-card {
@@ -676,8 +1134,78 @@ select:focus {
 }
 
 @media (max-width: 640px) {
-  .recruitment-grid,
+  .recruitment-grid {
+    grid-template-columns: 1fr;
+  }
+
   .studio-tabs {
     grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .studio-tabs-indicator {
+    width: calc(100% - 10px);
+    height: calc((100% - 16px) / 2);
+  }
+
+  .studio-tabs[data-active="recruitment"] .studio-tabs-indicator {
+    transform: translate3d(0, calc(100% + 6px), 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body,
+  .studio-shell,
+  .studio-shell::before,
+  .studio-shell::after,
+  .studio-header,
+  .studio-header::after,
+  .brand-icon,
+  .brand-mode-pill,
+  .pill,
+  .card,
+  .card-title,
+  textarea,
+  input,
+  select,
+  .duration-field,
+  .btn-primary,
+  .btn-secondary,
+  .btn-success,
+  .btn-recruitment,
+  .btn-recruitment-outline,
+  .audio-chip,
+  .scene-card,
+  .scene-index,
+  .unit,
+  .icon-btn,
+  .phone-frame,
+  .checkbox-field,
+  .status-badge,
+  .export-banner,
+  .export-link,
+  .preset-chip,
+  .video-chip-row,
+  .mini-chip-btn,
+  .studio-tabs,
+  .studio-tabs-indicator,
+  .studio-tabs-indicator::before,
+  .studio-tabs-indicator::after,
+  .studio-tab,
+  .recruitment-brand-box,
+  .flyer-upload-box {
+    transition: none !important;
+  }
+
+  .tab-panel-stage {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .tab-panel-stage::after,
+  .theme-ambient-sweep {
+    animation: none !important;
+    opacity: 0 !important;
   }
 }

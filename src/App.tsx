@@ -644,6 +644,10 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = activeTab;
+  }, [activeTab]);
+
   const parsedTargetDuration = useMemo(() => {
     const n = Number(targetDurationInput);
     return Number.isFinite(n) && n > 0 ? clampDuration(n) : 35;
@@ -1502,11 +1506,19 @@ export function App() {
   const isBusy = loading || voiceLoading || imagesLoading;
 
   return (
-    <div className="studio-shell">
+    <div className="studio-shell" data-theme={activeTab}>
+      <div
+        key={`ambient-${activeTab}`}
+        className="theme-ambient-sweep"
+        aria-hidden="true"
+      />
       <header className="studio-header">
         <div className="brand">
-          {h(Film, { size: 20 })}
+          <span className="brand-icon">{h(Film, { size: 18 })}</span>
           <span>Video Studio AI</span>
+          <span className="brand-mode-pill">
+            {activeTab === "recruitment" ? "ASR Group" : "Blaugrana"}
+          </span>
         </div>
         <div className="header-actions">
           <span className="pill">{totalSeconds}s · 9:16</span>
@@ -1596,10 +1608,18 @@ export function App() {
 
       <main className="studio-grid">
         <section className="editor-panel">
-          <div className="studio-tabs">
+          <div
+            className="studio-tabs"
+            data-active={activeTab}
+            role="tablist"
+            aria-label="Modo del estudio"
+          >
+            <div className="studio-tabs-indicator" aria-hidden="true" />
             <button
               type="button"
-              className={`studio-tab ${activeTab === "general" ? "active" : ""}`}
+              role="tab"
+              aria-selected={activeTab === "general"}
+              className={`studio-tab general ${activeTab === "general" ? "active" : ""}`}
               onClick={() => {
                 setActiveTab("general");
                 setError(null);
@@ -1610,6 +1630,8 @@ export function App() {
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={activeTab === "recruitment"}
               className={`studio-tab recruitment ${activeTab === "recruitment" ? "active" : ""}`}
               onClick={() => {
                 setActiveTab("recruitment");
@@ -1621,12 +1643,13 @@ export function App() {
             </button>
           </div>
 
-          {activeTab === "general" ? (
-            <form className="card" onSubmit={handleGenerateGeneral}>
-              <div className="card-title">
-                {h(Sparkles, { size: 16 })}
-                <span>Crear video sobre cualquier tema</span>
-              </div>
+          <div key={activeTab} className="tab-panel-stage">
+            {activeTab === "general" ? (
+              <form className="card general-card" onSubmit={handleGenerateGeneral}>
+                <div className="card-title general-title">
+                  {h(Sparkles, { size: 16 })}
+                  <span>Crear video sobre cualquier tema</span>
+                </div>
               <textarea
                 rows={3}
                 value={prompt}
@@ -1931,6 +1954,7 @@ export function App() {
               {error && <div className="error-banner">{error}</div>}
             </form>
           )}
+          </div>
 
           <div className="card">
             <div className="card-header-between">
