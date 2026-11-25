@@ -205,7 +205,7 @@ const BrandHeaderBar: React.FC<{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "14px 34px 18px 38px",
+        padding: "10px 34px 18px 38px",
         boxSizing: "border-box",
         boxShadow: "0 12px 32px rgba(0, 0, 0, 0.48)",
         fontFamily: "system-ui, -apple-system, sans-serif",
@@ -268,11 +268,10 @@ const BrandHeaderBar: React.FC<{
           "div",
           {
             style: {
-              width: 118,
-              height: 118,
+              width: 128,
+              height: 128,
               borderRadius: 20,
               backgroundColor: "#FFFFFF",
-              border: "3px solid #7EC34A",
               padding: 8,
               boxSizing: "border-box",
               display: "flex",
